@@ -347,13 +347,62 @@
 
   function setupCall(call) {
     mediaCall = call;
+    var watching = false;
     call.on("stream", function (stream) {
-      $("remoteVideo").srcObject = stream;
-      $("waiting").hidden = true;
-      setStatus("Connected", true);
+      var v = $("remoteVideo");
+      v.srcObject = stream;
+      setStatus("Connecting video…", false);
+      showWaiting("Connecting video…", "Her video is on the way.", false);
+      playRemote();
+      if (watching || !call.peerConnection) return;
+      watching = true;
+      var pc = call.peerConnection, done = false;
+      function onState() {
+        var s = pc.iceConnectionState;
+        if (s === "connected" || s === "completed") {
+          done = true;
+          setStatus("Connected", true);
+          $("waiting").hidden = true;
+          playRemote();
+        } else if (s === "failed") {
+          blocked();
+        }
+      }
+      pc.addEventListener("iceconnectionstatechange", onState);
+      onState();
+      setTimeout(function () { if (!done && mediaCall === call) blocked(); }, 15000);
     });
     call.on("close", partnerLeft);
     call.on("error", fail);
+  }
+
+  function playRemote() {
+    var p = $("remoteVideo").play();
+    if (p && p.catch) {
+      p.catch(function () {
+        setStatus("Tap to play", false);
+        showWaiting("Tap to see her video", "Your browser paused her video until you tap.", false);
+        $("waiting").dataset.tap = "1";
+      });
+    }
+  }
+  $("waiting").addEventListener("click", function () {
+    if (this.dataset.tap !== "1") return;
+    this.dataset.tap = "";
+    var p = $("remoteVideo").play();
+    if (p && p.then) p.then(function () {
+      $("waiting").hidden = true;
+      setStatus("Connected", true);
+    });
+  });
+
+  function blocked() {
+    setStatus("Video blocked", false);
+    showWaiting(
+      "Video is blocked by the network",
+      "Chat may still work, but video can’t get through. Try both of you on the same wifi, or add a TURN server (see README).",
+      false
+    );
   }
 
   function setupData(c) {
