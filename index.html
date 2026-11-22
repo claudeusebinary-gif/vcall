@@ -144,6 +144,27 @@
   .composer { display: flex; gap: 8px; padding: 12px; border-top: 1.5px solid var(--line); }
   .composer .btn { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 800; }
 
+  .float {
+    position: absolute; bottom: 110px; font-size: 44px; z-index: 3;
+    pointer-events: none; animation: rise 2.6s ease-out forwards;
+  }
+  @keyframes rise {
+    from { transform: translateY(0) scale(.6); opacity: 1; }
+    to { transform: translateY(-55vh) scale(1.3); opacity: 0; }
+  }
+  .shake { animation: shake .5s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-14px); }
+    40%, 80% { transform: translateX(14px); }
+  }
+  .ask {
+    position: absolute; left: 50%; top: 22%; transform: translateX(-50%);
+    width: min(90%, 420px); z-index: 3;
+    background: var(--panel); border: 1.5px solid var(--line); border-radius: 18px;
+    padding: 20px; text-align: center;
+  }
+  .ask p { margin: 0 0 14px; font-size: 22px; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; }
   .chat-head { display: flex; align-items: center; justify-content: space-between; }
   .chat-close { display: none; padding: 8px 14px; }
   .backdrop { display: none; position: fixed; inset: 0; z-index: 4; background: rgba(13,12,28,.45); }
@@ -180,7 +201,10 @@
     }
     body.chat-open .chat { transform: none; }
   }
-  @media (prefers-reduced-motion: reduce) { .chat { transition: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .chat { transition: none; }
+    .float, .shake { animation-duration: .01s; }
+  }
 </style>
 </head>
 <body>
@@ -210,12 +234,17 @@
       <button class="btn" id="copyLink" type="button">Copy invite link</button>
     </div>
     <div class="pip" id="pip"><video id="selfVideo" autoplay playsinline muted></video></div>
+    <div class="ask" id="ask" hidden><p id="askText"></p><button class="btn" id="askClose" type="button">Close</button></div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
     <div class="controls">
+      <div class="filters" id="qual" hidden aria-label="Her video quality"></div>
+      <div class="filters" id="fun" hidden aria-label="Fun"></div>
       <div class="filters" id="filters" hidden aria-label="Camera filters"></div>
       <button class="btn" id="micBtn" type="button">Mute</button>
       <button class="btn" id="camBtn" type="button">Camera off</button>
       <button class="btn" id="chatToggle" type="button">Chat<span class="unread" id="unread" hidden></span></button>
+      <button class="btn" id="qualBtn" type="button">Quality</button>
+      <button class="btn" id="funBtn" type="button">Fun</button>
       <button class="btn" id="filterBtn" type="button">Filters</button>
       <button class="btn leave" id="leaveBtn" type="button">Leave</button>
     </div>
@@ -279,9 +308,9 @@
   }
   function addMsg(text, mine) {
     addLine(text, "bubble " + (mine ? "me" : "them"));
-    if (!mine && isMobile() && !document.body.classList.contains("chat-open")) {
-      $("unread").hidden = false;
-    }
+    var hidden = isMobile() && !document.body.classList.contains("chat-open");
+    if (!mine && hidden) $("unread").hidden = false;
+    if (!mine && (hidden || document.hidden)) beep();
   }
 
   // ---------- lobby ----------
@@ -314,7 +343,7 @@
     lobbyMsg("Starting your camera…");
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" }, audio: true
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true
       });
     } catch (err) {
       lobbyMsg("Allow camera and microphone access in your browser, then press Enter room again.");
@@ -392,6 +421,7 @@
           $("waiting").hidden = true;
           playRemote();
           applySendTrack();
+          startTimer();
         } else if (s === "failed") {
           blocked();
         }
@@ -425,6 +455,7 @@
   });
 
   function blocked() {
+    stopTimer();
     setStatus("Video blocked", false);
     showWaiting(
       "Video is blocked by the network",
@@ -435,16 +466,18 @@
 
   function setupData(c) {
     dataConn = c;
-    c.on("open", function () { addLine("You’re connected. Say hi.", "sys"); });
-    c.on("data", function (d) {
-      if (d && d.type === "chat" && typeof d.text === "string") addMsg(d.text.slice(0, 2000), false);
+    c.on("open", function () {
+      addLine("You’re connected. Say hi.", "sys");
+      if (viewQuality !== "auto") c.send({ type: "quality", q: viewQuality });
     });
+    c.on("data", onData);
     c.on("close", partnerLeft);
     c.on("error", fail);
   }
 
   function partnerLeft() {
     if (!peer) return;
+    stopTimer();
     dataConn = null; mediaCall = null;
     $("remoteVideo").srcObject = null;
     setStatus("Waiting", false);
@@ -509,6 +542,208 @@
       .catch(function () { btn.textContent = "Your code: " + roomCode; });
     setTimeout(function () { btn.textContent = "Copy invite link"; }, 2500);
   });
+  // ---------- timer, quality, sound ----------
+  var callStart = 0, tick = null;
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function updateTimer() {
+    var s = Math.floor((Date.now() - callStart) / 1000);
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    var t = (h ? h + ":" + pad(m) : pad(m)) + ":" + pad(s % 60);
+    var v = $("remoteVideo");
+    // Shows the size of her video as it reaches you, so you can see the quality setting working.
+    setStatus(v.videoWidth ? t + "  " + v.videoWidth + "x" + v.videoHeight : t, true);
+  }
+  function startTimer() {
+    if (tick) return;
+    callStart = Date.now();
+    tick = setInterval(updateTimer, 1000);
+    updateTimer();
+  }
+  function stopTimer() { clearInterval(tick); tick = null; }
+
+  // What you ask her phone to send you. Lower settings save data and your free relay allowance.
+  var QUALITY = {
+    auto: null,
+    low: { scale: 4, bps: 150000 },
+    med: { scale: 2, bps: 600000 },
+    high: { scale: 1, bps: 2500000 }
+  };
+  var QUALITY_NAMES = { auto: "Auto", low: "Low (saves data)", med: "Medium", high: "High (HD)" };
+  var viewQuality = "auto";  // what I want to see from her
+  var outQuality = "auto";   // what she asked me to send
+
+  function applyQuality(q) {
+    if (!mediaCall || !mediaCall.peerConnection) return;
+    var cfg = QUALITY[q];
+    mediaCall.peerConnection.getSenders().forEach(function (s) {
+      if (!s.track || s.track.kind !== "video" || !s.getParameters) return;
+      var p = s.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      if (cfg) {
+        p.encodings[0].scaleResolutionDownBy = cfg.scale;
+        p.encodings[0].maxBitrate = cfg.bps;
+      } else {
+        delete p.encodings[0].scaleResolutionDownBy;
+        delete p.encodings[0].maxBitrate;
+      }
+      s.setParameters(p).catch(function () {});
+    });
+  }
+
+  function markQuality() {
+    var ids = Object.keys(QUALITY), chips = $("qual").querySelectorAll(".chip");
+    for (var i = 0; i < chips.length; i++) chips[i].classList.toggle("active", ids[i] === viewQuality);
+  }
+  Object.keys(QUALITY).forEach(function (id) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = QUALITY_NAMES[id];
+    b.addEventListener("click", function () {
+      viewQuality = id;
+      markQuality();
+      if (dataConn && dataConn.open) dataConn.send({ type: "quality", q: id });
+    });
+    $("qual").appendChild(b);
+  });
+  markQuality();
+  $("qualBtn").addEventListener("click", function () {
+    var box = $("qual");
+    box.hidden = !box.hidden;
+    this.classList.toggle("active", !box.hidden);
+  });
+
+  var actx = null;
+  document.addEventListener("click", function () {
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }, { once: true });
+  function beep() {
+    if (!actx) return;
+    try {
+      if (actx.state === "suspended") actx.resume();
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.value = 880; g.gain.value = 0.05;
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + 0.12);
+    } catch (e) {}
+  }
+
+  // ---------- fun stuff ----------
+  var EMOJIS = ["❤️", "😂", "😘", "🔥"];
+  var QUESTIONS = [
+    "Would you rather have a movie night in or a night out?",
+    "What’s your favorite memory of us so far?",
+    "Would you rather travel the world together or build our dream house?",
+    "What’s one thing I do that always makes you smile?",
+    "Where should we go on our first trip together?",
+    "Would you rather have breakfast in bed every day or dinner by the sea every week?",
+    "What song reminds you of us?",
+    "What’s something you want us to try together this year?",
+    "Describe our perfect lazy Sunday.",
+    "What was your first impression of me?",
+    "Would you rather teleport to me anytime or pause time whenever we’re together?",
+    "What’s one small thing I can do this week to make your day better?"
+  ];
+  var lastBuzz = 0;
+
+  function sendData(o) {
+    if (dataConn && dataConn.open) { dataConn.send(o); return true; }
+    addLine("Not connected yet.", "sys");
+    return false;
+  }
+
+  function floatEmoji(e) {
+    var s = document.createElement("span");
+    s.className = "float";
+    s.textContent = e;
+    s.style.left = (10 + Math.random() * 80) + "%";
+    s.addEventListener("animationend", function () { s.remove(); });
+    document.querySelector(".stage").appendChild(s);
+  }
+
+  function buzz(fromMe) {
+    var st = document.querySelector(".stage");
+    st.classList.remove("shake");
+    void st.offsetWidth;
+    st.classList.add("shake");
+    if (!fromMe && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    addLine(fromMe ? "You buzzed her." : "She buzzed you!", "sys");
+  }
+
+  function showAsk(i) {
+    var q = QUESTIONS[i];
+    if (!q) return;
+    $("askText").textContent = q;
+    $("ask").hidden = false;
+    addLine("Question: " + q, "sys");
+  }
+
+  function onData(d) {
+    if (!d) return;
+    if (d.type === "chat" && typeof d.text === "string") addMsg(d.text.slice(0, 2000), false);
+    else if (d.type === "react" && EMOJIS.indexOf(d.emoji) > -1) floatEmoji(d.emoji);
+    else if (d.type === "buzz" && Date.now() - lastBuzz > 3000) { lastBuzz = Date.now(); buzz(false); }
+    else if (d.type === "ask" && typeof d.i === "number") showAsk(d.i | 0);
+    else if (d.type === "quality" && Object.prototype.hasOwnProperty.call(QUALITY, d.q)) { outQuality = d.q; applyQuality(d.q); }
+  }
+
+  function drawCover(ctx, v, x, y, w, h, mirror) {
+    var vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw) return;
+    var s = Math.max(w / vw, h / vh), sw = w / s, sh = h / s;
+    var sx = (vw - sw) / 2, sy = (vh - sh) / 2;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    if (mirror) { ctx.translate(x + w, y); ctx.scale(-1, 1); ctx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h); }
+    else ctx.drawImage(v, sx, sy, sw, sh, x, y, w, h);
+    ctx.restore();
+  }
+
+  function takePhoto() {
+    var c = document.createElement("canvas");
+    c.width = 1280; c.height = 480;
+    var ctx = c.getContext("2d");
+    ctx.fillStyle = "#15132b";
+    ctx.fillRect(0, 0, c.width, c.height);
+    drawCover(ctx, $("remoteVideo"), 0, 0, 640, 480, false);
+    drawCover(ctx, $("selfVideo"), 640, 0, 640, 480, true);
+    var day = new Date().toISOString().slice(0, 10);
+    ctx.font = "700 26px sans-serif";
+    ctx.fillStyle = "#fff";
+    ctx.shadowColor = "rgba(0,0,0,.7)"; ctx.shadowBlur = 6;
+    ctx.fillText("Just us, " + day, 20, 460);
+    c.toBlob(function (blob) {
+      if (!blob) return;
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "just-us-" + day + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+      addLine("Photo saved to your device.", "sys");
+    }, "image/png");
+  }
+
+  function addFun(label, fn) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = label;
+    b.addEventListener("click", fn);
+    $("fun").appendChild(b);
+  }
+  EMOJIS.forEach(function (e) {
+    addFun(e, function () { if (sendData({ type: "react", emoji: e })) floatEmoji(e); });
+  });
+  addFun("Buzz", function () { if (sendData({ type: "buzz" })) buzz(true); });
+  addFun("Question", function () {
+    var i = Math.floor(Math.random() * QUESTIONS.length);
+    if (sendData({ type: "ask", i: i })) showAsk(i);
+  });
+  addFun("Photo", takePhoto);
+
+  $("funBtn").addEventListener("click", function () {
+    var box = $("fun");
+    box.hidden = !box.hidden;
+    this.classList.toggle("active", !box.hidden);
+  });
+  $("askClose").addEventListener("click", function () { $("ask").hidden = true; });
+
   // ---------- camera filters ----------
   // Filters are drawn onto a canvas and that picture is what gets sent,
   // so she sees the filter too, not only you.
@@ -585,6 +820,7 @@
     }
     $("selfVideo").srcObject = useFx ? fx.stream : localStream;
     if (!useFx) stopFx();
+    applyQuality(outQuality);
   }
 
   function markChips() {
@@ -619,6 +855,9 @@
     stopFx();
     markChips();
     $("filters").hidden = true;
+    $("fun").hidden = true;
+    $("funBtn").classList.remove("active");
+    $("ask").hidden = true;
     $("filterBtn").classList.remove("active");
   }
 
@@ -631,6 +870,11 @@
     if (peer) { try { peer.destroy(); } catch (e) {} }
     if (localStream) localStream.getTracks().forEach(function (t) { t.stop(); });
     resetFilters();
+    stopTimer();
+    viewQuality = "auto"; outQuality = "auto";
+    markQuality();
+    $("qual").hidden = true;
+    $("qualBtn").classList.remove("active");
     peer = localStream = dataConn = mediaCall = null;
     $("remoteVideo").srcObject = null;
     $("selfVideo").srcObject = null;
