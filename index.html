@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Just us</title>
 <meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0f1012">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Just us">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -266,6 +273,42 @@
   .bubble.them { background: #26282d; }
   .chip { border-width: 1px; font-size: 13px; padding: 6px 12px; background: rgba(15,16,18,.72); }
   .chip.active { background: var(--accent); }
+  .pip.screen video { transform: none; object-fit: contain; }
+  #remoteVideo.contain { object-fit: contain; }
+
+  /* tools: More tray, panels, filter tiles */
+  .more {
+    padding: 4px; gap: 2px; border-radius: 22px;
+    background: rgba(15,16,18,.72); border: 1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .more .btn { border: 0; background: transparent; border-radius: 18px; padding: 8px 14px; }
+  .more .btn:hover { background: rgba(255,255,255,.08); }
+  .filters {
+    flex-wrap: wrap; justify-content: flex-start; overflow: visible; gap: 8px;
+    width: min(92vw, 360px); padding: 14px; border-radius: 18px;
+    background: rgba(15,16,18,.84); border: 1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  }
+  .filters::before { content: attr(aria-label); flex: 0 0 100%; font-size: 13px; font-weight: 700; color: var(--muted); }
+  .filters .chip:first-child, .filters .chip:last-child { margin: 0; }
+  .filters .chip { background: rgba(255,255,255,.06); border-color: transparent; border-radius: 10px; padding: 8px 12px; }
+  .filters .chip:hover { background: rgba(255,255,255,.12); }
+  .filters .chip.active { background: var(--accent); color: var(--accent-ink); }
+  #qual .chip { flex: 1 1 40%; text-align: center; }
+  #fun .chip:nth-child(-n+4) { font-size: 22px; padding: 6px 14px; }
+  .tile {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    width: 60px; padding: 0; background: none; border: 0; cursor: pointer;
+    color: var(--muted); font-size: 11px; font-weight: 600;
+  }
+  .tile canvas { display: block; width: 60px; height: 76px; border-radius: 10px; border: 2px solid transparent; background: #1a1c20; }
+  .tile.active { color: var(--text); }
+  .tile.active canvas { border-color: var(--accent); }
+  .filters:not([hidden]), .more:not([hidden]) { animation: pop .15s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .filters, .more { animation: none !important; } }
+  @media (max-width: 800px) { .more .btn { padding: 8px 11px; font-size: 13px; } }
 
   @media (prefers-reduced-motion: reduce) {
     .chat { transition: none; }
@@ -311,6 +354,7 @@
         <button class="btn" id="qualBtn" type="button">Quality</button>
         <button class="btn" id="funBtn" type="button">Fun</button>
         <button class="btn" id="filterBtn" type="button">Filters</button>
+        <button class="btn" id="shareBtn" type="button">Share screen</button>
       </div>
       <div class="bar">
         <button class="btn icon" id="micBtn" type="button" aria-label="Mute microphone" title="Microphone">
@@ -364,6 +408,12 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var peer = null, localStream = null, dataConn = null, mediaCall = null, roomCode = "";
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+  }
 
   // ---------- helpers ----------
   function cleanCode(c) { return c.trim().toLowerCase().replace(/[^a-z0-9]/g, ""); }
@@ -561,6 +611,7 @@
   function partnerLeft() {
     if (!peer) return;
     stopTimer();
+    releaseScreen();
     dataConn = null; mediaCall = null;
     $("remoteVideo").srcObject = null;
     setStatus("Waiting", false);
@@ -709,6 +760,49 @@
     } catch (e) {}
   }
 
+  // ---------- screen sharing (computers only; phone browsers don't support it) ----------
+  var screenStream = null, screenTrack = null;
+
+  function setShareUI(on) {
+    $("shareBtn").textContent = on ? "Stop sharing" : "Share screen";
+    $("shareBtn").classList.toggle("active", on);
+    $("pip").classList.toggle("screen", on);
+  }
+  async function startScreen() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      addLine("Phone browsers can’t share their screen. Use a computer to share yours.", "sys");
+      return;
+    }
+    if (!mediaCall || !mediaCall.peerConnection) {
+      addLine("Wait until you’re connected, then share your screen.", "sys");
+      return;
+    }
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
+    } catch (e) { screenStream = null; return; }
+    screenTrack = screenStream.getVideoTracks()[0];
+    screenTrack.addEventListener("ended", stopScreen);
+    setShareUI(true);
+    if (dataConn && dataConn.open) dataConn.send({ type: "screen", on: true });
+    applySendTrack();
+  }
+  function stopScreen() {
+    if (!screenTrack) return;
+    releaseScreen();
+    if (dataConn && dataConn.open) dataConn.send({ type: "screen", on: false });
+    applySendTrack();
+  }
+  // Stops sharing without sending anything, used when the call ends.
+  function releaseScreen() {
+    if (screenTrack) { try { screenTrack.stop(); } catch (e) {} }
+    screenTrack = null; screenStream = null;
+    setShareUI(false);
+    $("remoteVideo").classList.remove("contain");
+  }
+  $("shareBtn").addEventListener("click", function () {
+    if (screenTrack) stopScreen(); else startScreen();
+  });
+
   // ---------- draw together, swap view, typing ----------
   var stage = document.querySelector(".stage");
   var dcv = $("draw"), dctx = dcv.getContext("2d");
@@ -843,6 +937,10 @@
     else if (d.type === "quality" && Object.prototype.hasOwnProperty.call(QUALITY, d.q)) { outQuality = d.q; applyQuality(d.q); }
     else if (d.type === "draw" && isFinite(d.x0) && isFinite(d.y0) && isFinite(d.x1) && isFinite(d.y1)) drawSeg(d, false);
     else if (d.type === "clear") clearDraw();
+    else if (d.type === "screen") {
+      $("remoteVideo").classList.toggle("contain", !!d.on);
+      addLine(d.on ? "She’s sharing her screen." : "Screen sharing stopped.", "sys");
+    }
     else if (d.type === "typing") showTyping();
   }
 
@@ -982,14 +1080,14 @@
   // Sends the filtered (or plain) camera picture to her and shows it in your small preview.
   function applySendTrack() {
     if (!localStream) return;
-    var useFx = currentFilter.id !== "none" && startFx();
-    var track = useFx ? fx.track : localStream.getVideoTracks()[0];
+    var useFx = !screenTrack && currentFilter.id !== "none" && startFx();
+    var track = screenTrack || (useFx ? fx.track : localStream.getVideoTracks()[0]);
     if (mediaCall && mediaCall.peerConnection && track) {
       mediaCall.peerConnection.getSenders().forEach(function (s) {
         if (s.track && s.track.kind === "video") s.replaceTrack(track).catch(function () {});
       });
     }
-    $("selfVideo").srcObject = useFx ? fx.stream : localStream;
+    $("selfVideo").srcObject = screenStream || (useFx ? fx.stream : localStream);
     if (!useFx) stopFx();
     applyQuality(outQuality);
   }
@@ -1004,8 +1102,10 @@
   FILTERS.forEach(function (f) {
     var b = document.createElement("button");
     b.type = "button";
-    b.className = "chip";
-    b.textContent = f.name;
+    b.className = "tile";
+    b.innerHTML = '<canvas width="60" height="76"></canvas><span></span>';
+    b.lastChild.textContent = f.name;
+    f.canvas = b.firstChild;
     b.addEventListener("click", function () {
       currentFilter = f;
       markChips();
@@ -1052,6 +1152,7 @@
     resetFilters();
     stopTimer();
     resetDraw();
+    releaseScreen();
     viewQuality = "auto"; outQuality = "auto";
     markQuality();
     $("qual").hidden = true;
