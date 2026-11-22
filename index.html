@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --night: #15132b;
@@ -165,6 +165,17 @@
     padding: 20px; text-align: center;
   }
   .ask p { margin: 0 0 14px; font-size: 22px; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; }
+  .draw { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; touch-action: none; }
+  .draw.on { pointer-events: auto; cursor: crosshair; }
+  .controls, .status { z-index: 3; }
+  .pip { cursor: pointer; z-index: 1; }
+  .stage.swap .pip { inset: 0; width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; cursor: default; }
+  .stage.swap #remoteVideo {
+    position: absolute; left: 16px; top: 16px; width: 120px; height: 160px; z-index: 2;
+    border-radius: 14px; border: 2px solid rgba(255,255,255,.25); cursor: pointer;
+  }
+  @media (max-width: 800px) { .stage.swap #remoteVideo { width: 90px; height: 120px; left: 12px; top: 12px; } }
+  .typing { margin-right: auto; margin-left: 10px; font-size: 14px; font-weight: 400; color: var(--muted); }
   .chat-head { display: flex; align-items: center; justify-content: space-between; }
   .chat-close { display: none; padding: 8px 14px; }
   .backdrop { display: none; position: fixed; inset: 0; z-index: 4; background: rgba(13,12,28,.45); }
@@ -201,6 +212,61 @@
     }
     body.chat-open .chat { transform: none; }
   }
+  /* ---------- refined minimal theme ---------- */
+  :root {
+    --night: #0f1012; --panel: #17181b; --line: #26282d;
+    --text: #eceef1; --muted: #8a8f98;
+    --accent: #e5708a; --accent-ink: #1a0b10; --ok: #5fd3a5;
+    --font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: clamp(40px, 9vw, 56px); font-weight: 700; letter-spacing: -0.035em; line-height: 1; margin-bottom: 14px; }
+  .lobby p { font-size: 15px; line-height: 1.6; }
+  label { font-size: 13px; color: var(--muted); }
+  input[type=text] { border-width: 1px; border-radius: 10px; padding: 13px 14px; font-size: 16px; }
+  input[type=text]:focus { border-color: var(--muted); }
+  .btn { border-width: 1px; border-radius: 10px; font-size: 14px; }
+  .btn.primary { font-size: 16px; font-weight: 700; padding: 14px; }
+  .stage, #remoteVideo { background: #0a0a0c; }
+  .waiting strong { font-size: clamp(22px, 5vw, 30px); font-weight: 700; letter-spacing: -0.02em; }
+  .waiting span { font-size: 15px; }
+  .pip { border: 1px solid rgba(255,255,255,.18); border-radius: 12px; box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+  .status {
+    background: rgba(15,16,18,.6); border: 1px solid rgba(255,255,255,.08);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .controls {
+    flex-direction: column; align-items: center; flex-wrap: nowrap; gap: 10px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+  .filters { flex: 0 0 auto; max-width: 100%; }
+  .more { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .more .btn { border-radius: 999px; padding: 7px 14px; font-size: 13px; border-color: rgba(255,255,255,.1); }
+  .bar {
+    display: flex; gap: 4px; padding: 6px; border-radius: 999px;
+    background: rgba(15,16,18,.72); border: 1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .controls .btn.icon {
+    position: relative; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+    display: grid; place-items: center; background: transparent; color: var(--text);
+  }
+  .controls .btn.icon:hover { background: rgba(255,255,255,.08); }
+  .controls .btn.icon.active { background: var(--text); color: var(--night); }
+  .controls .btn.leave.icon { background: #d64545; color: #fff; }
+  .controls .btn.leave.icon:hover { background: #e25a5a; }
+  #micBtn.active::after, #camBtn.active::after {
+    content: ""; position: absolute; inset: 0; margin: auto; width: 26px; height: 2px;
+    background: var(--night); transform: rotate(-45deg);
+  }
+  #chatToggle .unread { top: 9px; right: 9px; }
+  @media (max-width: 800px) { .controls .btn.icon#chatToggle { display: grid; } }
+  .chat-head { font-size: 16px; }
+  .bubble { border-radius: 14px; font-size: 15px; }
+  .bubble.them { background: #26282d; }
+  .chip { border-width: 1px; font-size: 13px; padding: 6px 12px; background: rgba(15,16,18,.72); }
+  .chip.active { background: var(--accent); }
+
   @media (prefers-reduced-motion: reduce) {
     .chat { transition: none; }
     .float, .shake { animation-duration: .01s; }
@@ -233,6 +299,7 @@
       <span id="waitSub">Send her your code, or copy the invite link. The call starts as soon as she enters.</span>
       <button class="btn" id="copyLink" type="button">Copy invite link</button>
     </div>
+    <canvas class="draw" id="draw"></canvas>
     <div class="pip" id="pip"><video id="selfVideo" autoplay playsinline muted></video></div>
     <div class="ask" id="ask" hidden><p id="askText"></p><button class="btn" id="askClose" type="button">Close</button></div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
@@ -240,19 +307,35 @@
       <div class="filters" id="qual" hidden aria-label="Her video quality"></div>
       <div class="filters" id="fun" hidden aria-label="Fun"></div>
       <div class="filters" id="filters" hidden aria-label="Camera filters"></div>
-      <button class="btn" id="micBtn" type="button">Mute</button>
-      <button class="btn" id="camBtn" type="button">Camera off</button>
-      <button class="btn" id="chatToggle" type="button">Chat<span class="unread" id="unread" hidden></span></button>
-      <button class="btn" id="qualBtn" type="button">Quality</button>
-      <button class="btn" id="funBtn" type="button">Fun</button>
-      <button class="btn" id="filterBtn" type="button">Filters</button>
-      <button class="btn leave" id="leaveBtn" type="button">Leave</button>
+      <div class="more" id="more" hidden>
+        <button class="btn" id="qualBtn" type="button">Quality</button>
+        <button class="btn" id="funBtn" type="button">Fun</button>
+        <button class="btn" id="filterBtn" type="button">Filters</button>
+      </div>
+      <div class="bar">
+        <button class="btn icon" id="micBtn" type="button" aria-label="Mute microphone" title="Microphone">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <button class="btn icon" id="camBtn" type="button" aria-label="Turn camera off" title="Camera">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3"/></svg>
+        </button>
+        <button class="btn icon" id="chatToggle" type="button" aria-label="Chat" title="Chat">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+          <span class="unread" id="unread" hidden></span>
+        </button>
+        <button class="btn icon" id="moreBtn" type="button" aria-label="More" title="More">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+        </button>
+        <button class="btn icon leave" id="leaveBtn" type="button" aria-label="Leave call" title="Leave">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14.5c5-4 13-4 18 0l-2.2 2.6-3-1.3v-2.4a11 11 0 0 0-5.6 0v2.4l-3 1.3z"/></svg>
+        </button>
+      </div>
     </div>
   </section>
 
   <div class="backdrop" id="backdrop"></div>
   <aside class="chat" id="chat" aria-label="Chat">
-    <div class="chat-head">Chat <button class="btn chat-close" id="chatClose" type="button">Hide</button></div>
+    <div class="chat-head">Chat <span class="typing" id="typing"></span> <button class="btn chat-close" id="chatClose" type="button">Hide</button></div>
     <div class="log" id="log" aria-live="polite"></div>
     <form class="composer" id="composer" autocomplete="off">
       <input type="text" id="msgInput" placeholder="Write a message" maxlength="2000" aria-label="Message">
@@ -524,13 +607,13 @@
   $("micBtn").addEventListener("click", function () {
     var on = false;
     localStream.getAudioTracks().forEach(function (t) { t.enabled = !t.enabled; on = t.enabled; });
-    this.textContent = on ? "Mute" : "Unmute";
+    this.setAttribute("aria-label", on ? "Mute microphone" : "Unmute microphone");
     this.classList.toggle("active", !on);
   });
   $("camBtn").addEventListener("click", function () {
     var on = false;
     localStream.getVideoTracks().forEach(function (t) { t.enabled = !t.enabled; on = t.enabled; });
-    this.textContent = on ? "Camera off" : "Camera on";
+    this.setAttribute("aria-label", on ? "Turn camera off" : "Turn camera on");
     this.classList.toggle("active", !on);
     $("pip").classList.toggle("off", !on);
   });
@@ -626,6 +709,81 @@
     } catch (e) {}
   }
 
+  // ---------- draw together, swap view, typing ----------
+  var stage = document.querySelector(".stage");
+  var dcv = $("draw"), dctx = dcv.getContext("2d");
+  var drawOn = false, drawing = false, lastPt = null, drawFade = null;
+
+  function sizeDraw() {
+    if (dcv.width !== stage.clientWidth || dcv.height !== stage.clientHeight) {
+      dcv.width = stage.clientWidth; dcv.height = stage.clientHeight;
+    }
+  }
+  function clearDraw() { dctx.clearRect(0, 0, dcv.width, dcv.height); }
+  // Your lines are pink, hers are green. Everything fades after 12 quiet seconds.
+  function drawSeg(s, mine) {
+    sizeDraw();
+    dctx.strokeStyle = mine ? "#ff6b8b" : "#6ee7b7";
+    dctx.lineWidth = 5; dctx.lineCap = "round";
+    dctx.beginPath();
+    dctx.moveTo(s.x0 * dcv.width, s.y0 * dcv.height);
+    dctx.lineTo(s.x1 * dcv.width, s.y1 * dcv.height);
+    dctx.stroke();
+    clearTimeout(drawFade);
+    drawFade = setTimeout(clearDraw, 12000);
+  }
+  function pt(e) {
+    var r = dcv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  }
+  dcv.addEventListener("pointerdown", function (e) {
+    if (!drawOn) return;
+    drawing = true; lastPt = pt(e);
+    dcv.setPointerCapture(e.pointerId);
+  });
+  dcv.addEventListener("pointermove", function (e) {
+    if (!drawing) return;
+    var p = pt(e), s = { type: "draw", x0: lastPt.x, y0: lastPt.y, x1: p.x, y1: p.y };
+    drawSeg(s, true);
+    if (dataConn && dataConn.open) dataConn.send(s);
+    lastPt = p;
+  });
+  function endDraw() { drawing = false; }
+  dcv.addEventListener("pointerup", endDraw);
+  dcv.addEventListener("pointercancel", endDraw);
+
+  function resetDraw() {
+    drawOn = false; drawing = false;
+    dcv.classList.remove("on");
+    clearTimeout(drawFade); clearDraw();
+    stage.classList.remove("swap");
+    $("typing").textContent = "";
+    Array.prototype.forEach.call($("fun").querySelectorAll(".chip"), function (c) {
+      if (c.textContent === "Stop drawing") { c.textContent = "Draw"; c.classList.remove("active"); }
+    });
+  }
+
+  // Tap your small picture to make it big, tap her small picture to swap back.
+  $("pip").addEventListener("click", function () {
+    if (!stage.classList.contains("swap")) stage.classList.add("swap");
+  });
+  $("remoteVideo").addEventListener("click", function () {
+    if (stage.classList.contains("swap")) stage.classList.remove("swap");
+  });
+
+  var typingTimer = null, lastTypingSent = 0;
+  $("msgInput").addEventListener("input", function () {
+    if (Date.now() - lastTypingSent > 2000 && dataConn && dataConn.open) {
+      lastTypingSent = Date.now();
+      dataConn.send({ type: "typing" });
+    }
+  });
+  function showTyping() {
+    $("typing").textContent = "typing…";
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(function () { $("typing").textContent = ""; }, 2500);
+  }
+
   // ---------- fun stuff ----------
   var EMOJIS = ["❤️", "😂", "😘", "🔥"];
   var QUESTIONS = [
@@ -683,6 +841,9 @@
     else if (d.type === "buzz" && Date.now() - lastBuzz > 3000) { lastBuzz = Date.now(); buzz(false); }
     else if (d.type === "ask" && typeof d.i === "number") showAsk(d.i | 0);
     else if (d.type === "quality" && Object.prototype.hasOwnProperty.call(QUALITY, d.q)) { outQuality = d.q; applyQuality(d.q); }
+    else if (d.type === "draw" && isFinite(d.x0) && isFinite(d.y0) && isFinite(d.x1) && isFinite(d.y1)) drawSeg(d, false);
+    else if (d.type === "clear") clearDraw();
+    else if (d.type === "typing") showTyping();
   }
 
   function drawCover(ctx, v, x, y, w, h, mirror) {
@@ -736,6 +897,16 @@
     if (sendData({ type: "ask", i: i })) showAsk(i);
   });
   addFun("Photo", takePhoto);
+  addFun("Draw", function () {
+    drawOn = !drawOn;
+    dcv.classList.toggle("on", drawOn);
+    this.classList.toggle("active", drawOn);
+    this.textContent = drawOn ? "Stop drawing" : "Draw";
+  });
+  addFun("Clear", function () {
+    clearDraw();
+    if (dataConn && dataConn.open) dataConn.send({ type: "clear" });
+  });
 
   $("funBtn").addEventListener("click", function () {
     var box = $("fun");
@@ -861,6 +1032,15 @@
     $("filterBtn").classList.remove("active");
   }
 
+  $("moreBtn").addEventListener("click", function () {
+    var tray = $("more");
+    tray.hidden = !tray.hidden;
+    this.classList.toggle("active", !tray.hidden);
+    if (tray.hidden) {
+      ["qual", "fun", "filters"].forEach(function (id) { $(id).hidden = true; });
+      ["qualBtn", "funBtn", "filterBtn"].forEach(function (id) { $(id).classList.remove("active"); });
+    }
+  });
   $("leaveBtn").addEventListener("click", leave);
   window.addEventListener("beforeunload", function () { if (peer) peer.destroy(); });
 
@@ -871,6 +1051,7 @@
     if (localStream) localStream.getTracks().forEach(function (t) { t.stop(); });
     resetFilters();
     stopTimer();
+    resetDraw();
     viewQuality = "auto"; outQuality = "auto";
     markQuality();
     $("qual").hidden = true;
@@ -879,8 +1060,9 @@
     $("remoteVideo").srcObject = null;
     $("selfVideo").srcObject = null;
     $("log").textContent = "";
-    $("micBtn").textContent = "Mute"; $("micBtn").classList.remove("active");
-    $("camBtn").textContent = "Camera off"; $("camBtn").classList.remove("active");
+    $("micBtn").setAttribute("aria-label", "Mute microphone"); $("micBtn").classList.remove("active");
+    $("camBtn").setAttribute("aria-label", "Turn camera off"); $("camBtn").classList.remove("active");
+    $("more").hidden = true; $("moreBtn").classList.remove("active");
     $("pip").classList.remove("off");
     document.body.classList.remove("chat-open");
     $("unread").hidden = true;
