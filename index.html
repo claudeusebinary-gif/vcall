@@ -6,6 +6,7 @@
 <title>Just us</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#0f1012">
+<script>try{var t=localStorage.getItem("justus-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -223,7 +224,7 @@
   :root {
     --night: #0f1012; --panel: #17181b; --line: #26282d;
     --text: #eceef1; --muted: #8a8f98;
-    --accent: #e5708a; --accent-ink: #1a0b10; --ok: #5fd3a5;
+    --accent: #5b9cff; --accent-ink: #06101f; --ok: #5fd3a5;
     --font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   h1 { font-size: clamp(40px, 9vw, 56px); font-weight: 700; letter-spacing: -0.035em; line-height: 1; margin-bottom: 14px; }
@@ -270,7 +271,7 @@
   @media (max-width: 800px) { .controls .btn.icon#chatToggle { display: grid; } }
   .chat-head { font-size: 16px; }
   .bubble { border-radius: 14px; font-size: 15px; }
-  .bubble.them { background: #26282d; }
+  .bubble.them { background: var(--bubble); }
   .chip { border-width: 1px; font-size: 13px; padding: 6px 12px; background: rgba(15,16,18,.72); }
   .chip.active { background: var(--accent); }
   .pip.screen video { transform: none; object-fit: contain; }
@@ -305,7 +306,7 @@
   .tile canvas { display: block; width: 60px; height: 76px; border-radius: 10px; border: 2px solid transparent; background: #1a1c20; }
   .tile.active { color: var(--text); }
   .tile.active canvas { border-color: var(--accent); }
-  input[type=date] { width: 100%; margin-top: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 16px; color-scheme: dark; }
+  input[type=date] { width: 100%; margin-top: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 16px; }
   .since { color: var(--muted); font-size: 14px; min-height: 20px; margin-top: 8px; }
   .emojis { display: flex; gap: 2px; overflow-x: auto; padding: 6px 10px 0; }
   .emojis button { background: none; border: 0; font-size: 20px; padding: 4px 6px; cursor: pointer; }
@@ -329,6 +330,25 @@
   }
   .ytbox { aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
   .ytbox iframe { display: block; width: 100%; height: 100%; border: 0; }
+
+  /* ---------- light and dark themes ---------- */
+  :root { color-scheme: dark; --bubble: #26282d; }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --night: #f6f7f9; --panel: #ffffff; --line: #dfe2e7;
+    --text: #14161a; --muted: #5f6672; --ok: #0f9d6e; --bubble: #e9ecf1;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      color-scheme: light;
+      --night: #f6f7f9; --panel: #ffffff; --line: #dfe2e7;
+      --text: #14161a; --muted: #5f6672; --ok: #0f9d6e; --bubble: #e9ecf1;
+    }
+  }
+  /* The video area stays dark in both themes, like most call apps. */
+  .stage { --panel: #17181b; --line: #2a2d33; --text: #eceef1; --muted: #8a8f98; --ok: #5fd3a5; color: var(--text); }
+  input::placeholder { color: var(--muted); opacity: .7; }
+  .theme-corner { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 1; padding: 7px 12px; font-size: 13px; }
   .filters:not([hidden]), .more:not([hidden]) { animation: pop .15s ease-out; }
   @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .filters, .more { animation: none !important; } }
@@ -344,6 +364,7 @@
 
 <!-- Lobby -->
 <main class="lobby" id="lobby">
+  <button class="btn theme-corner" id="themeLobby" type="button">Theme: Auto</button>
   <div class="lobby-inner">
     <h1>Just us.</h1>
     <p>A private video call and chat for two. Pick a secret code, share it with her, and you both enter the same room.</p>
@@ -397,6 +418,7 @@
         <button class="btn" id="shareBtn" type="button">Share screen</button>
         <button class="btn" id="flipBtn" type="button">Flip camera</button>
         <button class="btn" id="soundBtn" type="button">Sounds: on</button>
+        <button class="btn" id="themeBtn" type="button">Theme: Auto</button>
       </div>
       <div class="bar">
         <button class="btn icon" id="micBtn" type="button" aria-label="Mute microphone" title="Microphone">
@@ -1025,6 +1047,29 @@
     paintSoundBtn();
   });
 
+  // ---------- theme: Auto follows the phone, or force Light or Dark ----------
+  var themeMode = "auto";
+  try { themeMode = localStorage.getItem("justus-theme") || "auto"; } catch (e) {}
+  function applyTheme() {
+    var root = document.documentElement;
+    if (themeMode === "light" || themeMode === "dark") root.setAttribute("data-theme", themeMode);
+    else root.removeAttribute("data-theme");
+    var label = "Theme: " + themeMode.charAt(0).toUpperCase() + themeMode.slice(1);
+    $("themeBtn").textContent = label;
+    $("themeLobby").textContent = label;
+    var light = themeMode === "light" || (themeMode === "auto" && window.matchMedia("(prefers-color-scheme: light)").matches);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", light ? "#f6f7f9" : "#0f1012");
+  }
+  function cycleTheme() {
+    themeMode = themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : "auto";
+    try { localStorage.setItem("justus-theme", themeMode); } catch (e) {}
+    applyTheme();
+  }
+  $("themeBtn").addEventListener("click", cycleTheme);
+  $("themeLobby").addEventListener("click", cycleTheme);
+  applyTheme();
+
   // ---------- watch together (YouTube) ----------
   var yt = null, ytApi = null, ytQuiet = 0;
 
@@ -1111,7 +1156,7 @@
   // Your lines are pink, hers are green. Everything fades after 12 quiet seconds.
   function drawSeg(s, mine) {
     sizeDraw();
-    dctx.strokeStyle = mine ? "#ff6b8b" : "#6ee7b7";
+    dctx.strokeStyle = mine ? "#6aa7ff" : "#6ee7b7";
     dctx.lineWidth = 5; dctx.lineCap = "round";
     dctx.beginPath();
     dctx.moveTo(s.x0 * dcv.width, s.y0 * dcv.height);
