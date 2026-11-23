@@ -305,6 +305,17 @@
   .tile canvas { display: block; width: 60px; height: 76px; border-radius: 10px; border: 2px solid transparent; background: #1a1c20; }
   .tile.active { color: var(--text); }
   .tile.active canvas { border-color: var(--accent); }
+  input[type=date] { width: 100%; margin-top: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 16px; color-scheme: dark; }
+  .since { color: var(--muted); font-size: 14px; min-height: 20px; margin-top: 8px; }
+  .emojis { display: flex; gap: 2px; overflow-x: auto; padding: 6px 10px 0; }
+  .emojis button { background: none; border: 0; font-size: 20px; padding: 4px 6px; cursor: pointer; }
+  .pip.back video { transform: none; }
+  .game { top: 14%; }
+  .game .row { justify-content: center; }
+  .ttt { display: grid; grid-template-columns: repeat(3, 72px); gap: 6px; justify-content: center; margin-bottom: 14px; }
+  .ttt button { height: 72px; font-size: 32px; font-weight: 800; border-radius: 12px; border: 0; background: rgba(255,255,255,.06); color: var(--text); cursor: pointer; }
+  .ttt .X { color: var(--accent); }
+  .ttt .O { color: var(--ok); }
   .filters:not([hidden]), .more:not([hidden]) { animation: pop .15s ease-out; }
   @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .filters, .more { animation: none !important; } }
@@ -328,6 +339,9 @@
       <input type="text" id="code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="at least 6 letters or numbers">
       <button class="btn" id="gen" type="button">Make one</button>
     </div>
+    <label for="since" style="margin-top:18px">Together since (optional)</label>
+    <input type="date" id="since">
+    <div class="since" id="sinceOut"></div>
     <button class="btn primary" id="enter" type="button">Enter room</button>
     <div class="msg" id="lobbyMsg" role="status"></div>
   </div>
@@ -345,6 +359,11 @@
     <canvas class="draw" id="draw"></canvas>
     <div class="pip" id="pip"><video id="selfVideo" autoplay playsinline muted></video></div>
     <div class="ask" id="ask" hidden><p id="askText"></p><button class="btn" id="askClose" type="button">Close</button></div>
+    <div class="ask game" id="game" hidden>
+      <div class="ttt" id="ttt"></div>
+      <p id="gameMsg"></p>
+      <div class="row"><button class="btn" id="gameNew" type="button">New game</button><button class="btn" id="gameClose" type="button">Close</button></div>
+    </div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
     <div class="controls">
       <div class="filters" id="qual" hidden aria-label="Her video quality"></div>
@@ -355,6 +374,7 @@
         <button class="btn" id="funBtn" type="button">Fun</button>
         <button class="btn" id="filterBtn" type="button">Filters</button>
         <button class="btn" id="shareBtn" type="button">Share screen</button>
+        <button class="btn" id="flipBtn" type="button">Flip camera</button>
       </div>
       <div class="bar">
         <button class="btn icon" id="micBtn" type="button" aria-label="Mute microphone" title="Microphone">
@@ -381,6 +401,7 @@
   <aside class="chat" id="chat" aria-label="Chat">
     <div class="chat-head">Chat <span class="typing" id="typing"></span> <button class="btn chat-close" id="chatClose" type="button">Hide</button></div>
     <div class="log" id="log" aria-live="polite"></div>
+    <div class="emojis" id="emojis"></div>
     <form class="composer" id="composer" autocomplete="off">
       <input type="text" id="msgInput" placeholder="Write a message" maxlength="2000" aria-label="Message">
       <button class="btn" type="submit">Send</button>
@@ -441,6 +462,7 @@
   }
   function addMsg(text, mine) {
     addLine(text, "bubble " + (mine ? "me" : "them"));
+    remember(text, mine);
     var hidden = isMobile() && !document.body.classList.contains("chat-open");
     if (!mine && hidden) $("unread").hidden = false;
     if (!mine && (hidden || document.hidden)) beep();
@@ -484,6 +506,7 @@
       return;
     }
     roomCode = code;
+    loadHist();
     $("selfVideo").srcObject = localStream;
     $("lobby").hidden = true;
     $("call").hidden = false;
@@ -601,6 +624,7 @@
     dataConn = c;
     c.on("open", function () {
       addLine("You’re connected. Say hi.", "sys");
+      if (sinceText()) addLine(sinceText(), "sys");
       if (viewQuality !== "auto") c.send({ type: "quality", q: viewQuality });
     });
     c.on("data", onData);
@@ -803,6 +827,135 @@
     if (screenTrack) stopScreen(); else startScreen();
   });
 
+  // ---------- flip camera, days together, emoji, history, game, record ----------
+  var facing = "user";
+  async function flipCamera() {
+    if (!localStream) return;
+    var next = facing === "user" ? "environment" : "user";
+    try {
+      var ns = await navigator.mediaDevices.getUserMedia({ video: { facingMode: next, width: { ideal: 1280 }, height: { ideal: 720 } } });
+      var nt = ns.getVideoTracks()[0], old = localStream.getVideoTracks()[0];
+      nt.enabled = old ? old.enabled : true;
+      localStream.addTrack(nt);
+      if (old) { localStream.removeTrack(old); old.stop(); }
+      facing = next;
+      $("pip").classList.toggle("back", facing === "environment");
+      stopFx();
+      if (rawV) rawV.srcObject = new MediaStream([nt]);
+      applySendTrack();
+    } catch (e) { addLine("Couldn’t switch the camera.", "sys"); }
+  }
+  $("flipBtn").addEventListener("click", flipCamera);
+
+  function sinceText() {
+    var v = "";
+    try { v = localStorage.getItem("justus-since") || ""; } catch (e) {}
+    if (!v) return "";
+    var n = Math.floor((Date.now() - new Date(v + "T00:00:00").getTime()) / 864e5) + 1;
+    return n > 0 ? "Day " + n + " together ❤️" : "";
+  }
+  try { $("since").value = localStorage.getItem("justus-since") || ""; } catch (e) {}
+  $("sinceOut").textContent = sinceText();
+  $("since").addEventListener("change", function () {
+    try { localStorage.setItem("justus-since", this.value); } catch (e) {}
+    $("sinceOut").textContent = sinceText();
+  });
+
+  ["😀", "😂", "😍", "🥰", "😘", "😢", "👍", "🙏", "🔥", "❤️"].forEach(function (e) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = e; b.setAttribute("aria-label", "Insert " + e);
+    b.addEventListener("click", function () { var i = $("msgInput"); i.value += e; i.focus(); });
+    $("emojis").appendChild(b);
+  });
+
+  // Chat history is kept only on this device, per room code.
+  var hist = [];
+  function histKey() { return "justus-chat-" + roomCode; }
+  function remember(text, mine) {
+    hist.push({ t: text, m: mine ? 1 : 0 });
+    if (hist.length > 100) hist.shift();
+    try { localStorage.setItem(histKey(), JSON.stringify(hist)); } catch (e) {}
+  }
+  function loadHist() {
+    try { hist = JSON.parse(localStorage.getItem(histKey()) || "[]"); } catch (e) { hist = []; }
+    if (!Array.isArray(hist)) hist = [];
+    hist.forEach(function (h) { if (h && typeof h.t === "string") addLine(h.t, "bubble " + (h.m ? "me" : "them")); });
+    if (hist.length) addLine("Earlier messages above", "sys");
+  }
+
+  // Tic-tac-toe: whoever starts the game is X and goes first.
+  var ttt = { b: [], turn: "X", me: "X", over: true, win: "" };
+  var LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  function tttStart(me) {
+    ttt = { b: ["","","","","","","","",""], turn: "X", me: me, over: false, win: "" };
+    $("game").hidden = false;
+    tttDraw();
+  }
+  function tttResult() {
+    for (var i = 0; i < LINES.length; i++) {
+      var l = LINES[i];
+      if (ttt.b[l[0]] && ttt.b[l[0]] === ttt.b[l[1]] && ttt.b[l[0]] === ttt.b[l[2]]) return ttt.b[l[0]];
+    }
+    return ttt.b.indexOf("") < 0 ? "draw" : "";
+  }
+  function tttPlay(i, sym) {
+    if (ttt.over || ttt.b[i] || ttt.turn !== sym) return false;
+    ttt.b[i] = sym;
+    var w = tttResult();
+    if (w) { ttt.over = true; ttt.win = w; } else ttt.turn = sym === "X" ? "O" : "X";
+    tttDraw();
+    return true;
+  }
+  function tttDraw() {
+    var g = $("ttt");
+    g.textContent = "";
+    ttt.b.forEach(function (v, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = v; b.className = v;
+      b.setAttribute("aria-label", "Square " + (i + 1));
+      b.addEventListener("click", function () {
+        if (tttPlay(i, ttt.me) && dataConn && dataConn.open) dataConn.send({ type: "ttt", cmd: "move", i: i });
+      });
+      g.appendChild(b);
+    });
+    $("gameMsg").textContent = ttt.over
+      ? (ttt.win === "draw" ? "It’s a draw." : ttt.win === ttt.me ? "You won!" : "She won.")
+      : (ttt.turn === ttt.me ? "Your turn" : "Her turn");
+  }
+  function newGame() { if (sendData({ type: "ttt", cmd: "start" })) tttStart("X"); }
+  $("gameNew").addEventListener("click", newGame);
+  $("gameClose").addEventListener("click", function () { $("game").hidden = true; });
+
+  // Recording mixes both voices with her video and saves a file on your device. She is told.
+  var rec = null, recChunks = [];
+  function toggleRecord(chip) {
+    if (rec) { rec.stop(); return; }
+    var rs = $("remoteVideo").srcObject;
+    if (!rs || !window.MediaRecorder) { addLine("Nothing to record yet.", "sys"); return; }
+    var ac = new (window.AudioContext || window.webkitAudioContext)(), dest = ac.createMediaStreamDestination();
+    [rs, localStream].forEach(function (s) {
+      if (s && s.getAudioTracks().length) ac.createMediaStreamSource(new MediaStream(s.getAudioTracks())).connect(dest);
+    });
+    rec = new MediaRecorder(new MediaStream(rs.getVideoTracks().concat(dest.stream.getAudioTracks())));
+    recChunks = [];
+    rec.ondataavailable = function (e) { if (e.data.size) recChunks.push(e.data); };
+    rec.onstop = function () {
+      var type = rec.mimeType || "video/webm";
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(recChunks, { type: type }));
+      a.download = "just-us-" + new Date().toISOString().slice(0, 10) + (type.indexOf("mp4") > -1 ? ".mp4" : ".webm");
+      document.body.appendChild(a); a.click(); a.remove();
+      ac.close(); rec = null;
+      chip.textContent = "Record"; chip.classList.remove("active");
+      if (dataConn && dataConn.open) dataConn.send({ type: "rec", on: false });
+      addLine("Recording saved to your device.", "sys");
+    };
+    rec.start();
+    chip.textContent = "Stop recording"; chip.classList.add("active");
+    if (dataConn && dataConn.open) dataConn.send({ type: "rec", on: true });
+    addLine("Recording started. She has been told.", "sys");
+  }
+
   // ---------- draw together, swap view, typing ----------
   var stage = document.querySelector(".stage");
   var dcv = $("draw"), dctx = dcv.getContext("2d");
@@ -851,6 +1004,10 @@
     dcv.classList.remove("on");
     clearTimeout(drawFade); clearDraw();
     stage.classList.remove("swap");
+    facing = "user"; $("pip").classList.remove("back");
+    $("game").hidden = true; ttt.over = true;
+    if (rec) rec.stop();
+    hist = [];
     $("typing").textContent = "";
     Array.prototype.forEach.call($("fun").querySelectorAll(".chip"), function (c) {
       if (c.textContent === "Stop drawing") { c.textContent = "Draw"; c.classList.remove("active"); }
@@ -942,6 +1099,11 @@
       addLine(d.on ? "She’s sharing her screen." : "Screen sharing stopped.", "sys");
     }
     else if (d.type === "typing") showTyping();
+    else if (d.type === "ttt") {
+      if (d.cmd === "start") tttStart("O");
+      else if (d.cmd === "move" && (d.i | 0) >= 0 && (d.i | 0) < 9) tttPlay(d.i | 0, ttt.me === "X" ? "O" : "X");
+    }
+    else if (d.type === "rec") addLine(d.on ? "She started recording the call." : "She stopped recording.", "sys");
   }
 
   function drawCover(ctx, v, x, y, w, h, mirror) {
@@ -1005,6 +1167,9 @@
     clearDraw();
     if (dataConn && dataConn.open) dataConn.send({ type: "clear" });
   });
+
+  addFun("Tic-tac-toe", newGame);
+  addFun("Record", function () { toggleRecord(this); });
 
   $("funBtn").addEventListener("click", function () {
     var box = $("fun");
