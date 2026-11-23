@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
 <style>
   :root {
     --night: #15132b;
@@ -418,6 +418,73 @@
   @media (prefers-reduced-motion: reduce) { .filters, .more { animation: none !important; } }
   @media (max-width: 800px) { .more .btn { padding: 8px 11px; font-size: 13px; } }
 
+  /* ---------- Messenger-style emoji + chat ---------- */
+  :root { --font: "Manrope", "Noto Color Emoji", system-ui, -apple-system, "Segoe UI", Roboto, "Apple Color Emoji", "Segoe UI Emoji", sans-serif; }
+  .bubble { border-radius: 20px; padding: 8px 14px; }
+  .bubble.me { background: linear-gradient(160deg, #0a8bff 0%, #7a5cff 60%, #b44bff 100%); background-attachment: fixed; color: #fff; border-bottom-right-radius: 6px; }
+  .bubble.them { border-bottom-left-radius: 6px; }
+  .emojis { padding: 8px 10px 4px; gap: 4px; }
+  .emojis button { font-size: 26px; padding: 4px 6px; border-radius: 50%; transition: transform .15s cubic-bezier(.3,1.6,.5,1); }
+  .emojis button:hover, .emojis button:focus-visible { transform: scale(1.35) translateY(-3px); }
+  .emojis button:active { transform: scale(.9); }
+  .composer input[type=text] { border-radius: 999px; padding-left: 18px; }
+  .composer .btn { border-radius: 999px; background: #0a8bff; border-color: #0a8bff; color: #fff; }
+  #fun .chip:nth-child(-n+4) { font-size: 26px; padding: 4px 12px; transition: transform .15s cubic-bezier(.3,1.6,.5,1); }
+  #fun .chip:nth-child(-n+4):hover { transform: scale(1.25) translateY(-3px); }
+  .float { font-size: 52px; filter: drop-shadow(0 6px 8px rgba(0,0,0,.28)); animation: floaty 2.8s cubic-bezier(.2,.7,.3,1) forwards; }
+  @keyframes floaty {
+    0% { transform: translate(0, 0) scale(.3); opacity: 0; }
+    12% { transform: translate(0, -8vh) scale(1.35); opacity: 1; }
+    22% { transform: translate(0, -12vh) scale(1); }
+    60% { transform: translate(18px, -34vh) scale(1.1) rotate(8deg); opacity: 1; }
+    100% { transform: translate(-14px, -58vh) scale(1.2) rotate(-8deg); opacity: 0; }
+  }
+
+  /* ---------- cute photobooth ---------- */
+  .watch.booth {
+    --text: #5a2a4b; --muted: #a8668b;
+    color: var(--text); text-align: center;
+    background: linear-gradient(160deg, #fff0f6 0%, #f3e8ff 55%, #e6f1ff 100%);
+    border: 2px dashed #ffb3d1; border-radius: 28px; padding: 14px 16px 16px;
+    box-shadow: 0 14px 40px rgba(255,120,170,.3), inset 0 0 0 5px rgba(255,255,255,.65);
+    animation: boothIn .35s cubic-bezier(.3,1.5,.5,1);
+  }
+  @keyframes boothIn { from { opacity: 0; transform: translateY(16px) scale(.92); } to { opacity: 1; transform: none; } }
+  .btitle { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 10px; color: #d6307f; }
+  .btitle span { display: inline-block; animation: wiggle 2.2s ease-in-out infinite; }
+  .btitle span:last-child { animation-delay: .6s; }
+  @keyframes wiggle { 0%, 100% { transform: rotate(-12deg) scale(1); } 50% { transform: rotate(12deg) scale(1.2); } }
+  .booth .bgroup { margin-bottom: 12px; }
+  .booth .bgroup > span { color: var(--muted); }
+  .booth .bchips { justify-content: center; gap: 8px; }
+  :root .booth .bchips .chip {
+    background: #fff; color: var(--text); border: 2px solid #ffd0e2; border-radius: 999px;
+    padding: 6px 14px; font-weight: 700; box-shadow: 0 2px 0 #ffd0e2;
+    transition: transform .15s cubic-bezier(.3,1.6,.5,1), background .15s;
+  }
+  :root .booth .bchips .chip:hover { transform: translateY(-2px) scale(1.06); }
+  :root .booth .bchips .chip.active {
+    background: linear-gradient(135deg, #ff7eb3, #ff5fa2); border-color: #ff5fa2; color: #fff;
+    box-shadow: 0 3px 0 #d6307f; transform: translateY(-1px);
+  }
+  :root .booth #bStick .chip { width: 46px; height: 46px; padding: 0; font-size: 26px; display: grid; place-items: center; }
+  :root .booth #bStick .chip:first-child { width: auto; padding: 0 14px; font-size: 14px; }
+  :root .booth #bColor .chip { width: 38px; height: 38px; padding: 0; font-size: 0; border: 3px solid #fff; background: var(--sw); box-shadow: 0 0 0 2px #ffd0e2, 0 3px 6px rgba(0,0,0,.15); }
+  :root .booth #bColor .chip.active { background: var(--sw); box-shadow: 0 0 0 3px #ff5fa2, 0 3px 6px rgba(0,0,0,.2); transform: scale(1.15); }
+  .bresult img { border: 6px solid #fff; border-radius: 14px; box-shadow: 0 8px 22px rgba(214,48,127,.28); animation: strip .5s cubic-bezier(.3,1.5,.5,1); transform-origin: top center; }
+  @keyframes strip { from { opacity: 0; transform: translateY(-14px) scale(.85) rotate(-3deg); } to { opacity: 1; transform: none; } }
+  .booth .row { justify-content: center; gap: 10px; }
+  .booth .btn { border-radius: 999px; background: #fff; color: var(--text); border: 2px solid #ffd0e2; font-weight: 700; padding: 10px 18px; }
+  :root .booth #bStart { background: linear-gradient(135deg, #ff7eb3, #ff5fa2); border-color: #ff5fa2; color: #fff; box-shadow: 0 3px 0 #d6307f; }
+  :root .booth #bStart:active { transform: translateY(2px); box-shadow: 0 1px 0 #d6307f; }
+  .count { color: #fff; text-shadow: 0 4px 0 #ff5fa2, 0 8px 28px rgba(214,48,127,.55); animation: tick .9s ease-out; }
+  @keyframes tick { 0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; } 25% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); } }
+  .flash { position: absolute; inset: 0; z-index: 5; background: #fff; pointer-events: none; animation: flash .45s ease-out forwards; }
+  @keyframes flash { from { opacity: .95; } to { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .watch.booth, .btitle span, .bresult img, .count, .flash { animation-duration: .01s !important; animation-iteration-count: 1 !important; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .chat { transition: none; }
     .float, .shake { animation-duration: .01s; }
@@ -482,14 +549,15 @@
     </div>
     <div class="count" id="count" hidden></div>
     <div class="watch booth" id="boothCard" hidden>
+      <div class="btitle"><span>✨</span> Photobooth <span>💖</span></div>
       <div class="bgroup"><span>Photos</span><div class="bchips" id="bCount"></div></div>
       <div class="bgroup"><span>Sticker</span><div class="bchips" id="bStick"></div></div>
       <div class="bgroup"><span>Strip colour</span><div class="bchips" id="bColor"></div></div>
       <div class="bresult" id="bResult" hidden>
         <img id="bImg" alt="Your photo strip">
-        <a class="btn" id="bSave" download="just-us-strip.png">Save strip</a>
+        <a class="btn" id="bSave" download="just-us-strip.png">💾 Save strip</a>
       </div>
-      <div class="row"><button class="btn" id="bStart" type="button">Start</button><button class="btn" id="bClose" type="button">Close</button></div>
+      <div class="row"><button class="btn" id="bStart" type="button">📸 Take photos</button><button class="btn" id="bClose" type="button">Close</button></div>
     </div>
     <div class="toast" id="toast" hidden></div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
@@ -1160,11 +1228,13 @@
   applyTheme();
 
   // ---------- photobooth: 1 to 4 photos of both of you on one strip ----------
-  var B_STICKERS = ["", "🕶️", "😎", "❤️", "⭐", "🎀", "🐱", "🌸", "🔥"];
+  var B_STICKERS = ["", "😎", "🥰", "😍", "💖", "⭐", "🎀", "🐱", "🌸", "✨", "🦋", "🔥"];
   var B_COLORS = [
-    { n: "Cream", bg: "#f3ead9", ink: "#3b2a1e" }, { n: "White", bg: "#ffffff", ink: "#14161a" },
-    { n: "Black", bg: "#111214", ink: "#f4f4f4" }, { n: "Blue", bg: "#5b9cff", ink: "#06101f" }
+    { n: "Pink", bg: "#ffd6e7", ink: "#8a2457" }, { n: "Lavender", bg: "#e6dcff", ink: "#4b2e83" },
+    { n: "Mint", bg: "#d3f5e6", ink: "#1f5c47" }, { n: "Cream", bg: "#f6ecd9", ink: "#5b3b28" },
+    { n: "Sky", bg: "#cfe6ff", ink: "#1b4a85" }, { n: "Black", bg: "#1b1620", ink: "#ffd0e8" }
   ];
+  var EMOJI_FONT = '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
   var bCount = 3, bSticker = "", bColor = 0, bBusy = false, bFloat = null;
 
   function bChips(id, items, label, pick, isActive) {
@@ -1183,6 +1253,15 @@
   bChips("bCount", [1, 2, 3, 4], function (n) { return n + (n === 1 ? " photo" : " photos"); }, function (n) { bCount = n; }, function (n) { return n === bCount; });
   bChips("bStick", B_STICKERS, function (s) { return s || "None"; }, function (s) { bSticker = s; }, function (s) { return s === bSticker; });
   bChips("bColor", B_COLORS, function (c) { return c.n; }, function (c, i) { bColor = i; }, function (c, i) { return i === bColor; });
+  Array.prototype.forEach.call($("bColor").children, function (b, i) {
+    b.style.setProperty("--sw", B_COLORS[i].bg); b.setAttribute("aria-label", B_COLORS[i].n + " strip"); b.title = B_COLORS[i].n;
+  });
+
+  function rr(x, px, py, w, h, r) {
+    x.beginPath(); x.moveTo(px + r, py);
+    x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r);
+    x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath();
+  }
 
   // One frame: you on the left, her on the right (or just you if she has no video), plus stickers.
   function boothFrame() {
@@ -1193,29 +1272,46 @@
     if (rv.videoWidth) { drawCover(x, sv, 0, 0, 320, 300, true); drawCover(x, rv, 320, 0, 320, 300, false); }
     else drawCover(x, sv, 0, 0, 640, 300, true);
     if (bSticker) {
-      for (var i = 0; i < 6; i++) {
+      // stickers sit around the edges so they don't cover faces
+      var spots = [[44, 54], [596, 54], [44, 252], [596, 252], [320, 40], [320, 262]];
+      spots.forEach(function (p) {
         x.save();
-        x.translate(30 + Math.random() * 580, 50 + Math.random() * 230);
-        x.rotate((Math.random() - 0.5) * 0.8);
-        x.font = Math.round(44 + Math.random() * 36) + "px sans-serif";
-        x.textAlign = "center";
+        x.translate(p[0] + (Math.random() - 0.5) * 20, p[1] + (Math.random() - 0.5) * 20);
+        x.rotate((Math.random() - 0.5) * 0.7);
+        x.font = Math.round(46 + Math.random() * 22) + "px " + EMOJI_FONT;
+        x.textAlign = "center"; x.textBaseline = "middle";
+        x.shadowColor = "rgba(0,0,0,.25)"; x.shadowBlur = 8; x.shadowOffsetY = 3;
         x.fillText(bSticker, 0, 0);
         x.restore();
-      }
+      });
     }
     return c;
   }
+  // The strip: pastel paper, polaroid frames with a little tilt, hearts and dots.
   function boothStrip(frames) {
-    var col = B_COLORS[bColor], n = frames.length, W = 700, H = 100 + n * 316 + 54;
+    var col = B_COLORS[bColor], n = frames.length, W = 700, H = 110 + n * 316 + 70;
     var c = document.createElement("canvas");
     c.width = W; c.height = H;
     var x = c.getContext("2d");
     x.fillStyle = col.bg; x.fillRect(0, 0, W, H);
-    x.fillStyle = col.ink; x.textAlign = "center";
-    x.font = "800 44px Manrope, sans-serif"; x.fillText("Just us", W / 2, 64);
-    frames.forEach(function (f, i) { x.drawImage(f, 30, 90 + i * 316); });
-    x.font = "600 22px Manrope, sans-serif";
-    x.fillText(new Date().toISOString().slice(0, 10), W / 2, H - 20);
+    x.fillStyle = col.ink; x.globalAlpha = 0.07;
+    for (var dx = 20; dx < W; dx += 44) for (var dy = 20; dy < H; dy += 44) { x.beginPath(); x.arc(dx + ((dy / 44) % 2 ? 22 : 0), dy, 5, 0, 6.3); x.fill(); }
+    x.globalAlpha = 1;
+    x.fillStyle = col.ink; x.textAlign = "center"; x.textBaseline = "alphabetic";
+    x.font = "800 46px Manrope, " + EMOJI_FONT; x.fillText("💖 Just us 💖", W / 2, 70);
+    frames.forEach(function (f, i) {
+      var cx = W / 2, cy = 110 + i * 316 + 150;
+      x.save();
+      x.translate(cx, cy); x.rotate((i % 2 ? 1 : -1) * 0.017);
+      x.shadowColor = "rgba(0,0,0,.22)"; x.shadowBlur = 16; x.shadowOffsetY = 6;
+      x.fillStyle = "#fff"; rr(x, -308, -148, 616, 296, 18); x.fill();
+      x.shadowColor = "transparent";
+      rr(x, -300, -140, 600, 280, 12); x.clip();
+      x.drawImage(f, -300, -140, 600, 280);
+      x.restore();
+    });
+    x.fillStyle = col.ink; x.font = "700 22px Manrope, " + EMOJI_FONT;
+    x.fillText("🌸 " + new Date().toISOString().slice(0, 10) + " 🌸", W / 2, H - 28);
     return c;
   }
   function boothWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -1223,16 +1319,22 @@
     if (bBusy) return;
     bBusy = true; $("bStart").disabled = true; $("bResult").hidden = true;
     var frames = [];
+    // make sure the emoji font is ready before anything is drawn on the canvas
+    try { await Promise.race([document.fonts.load('48px "Noto Color Emoji"', (bSticker || "") + "💖🌸"), boothWait(1500)]); } catch (e) {}
     for (var i = 0; i < bCount; i++) {
       for (var s = 3; s > 0; s--) {
         if ($("boothCard").hidden) { bBusy = false; return; }
-        $("count").textContent = s; $("count").hidden = false;
+        var cn = $("count"); cn.hidden = true; void cn.offsetWidth;
+        cn.textContent = s; cn.hidden = false;
         sfx.click();
         await boothWait(900);
       }
       $("count").hidden = true;
       tone(220, 0, 0.12, 0.1);
       frames.push(boothFrame());
+      var fl = document.createElement("div"); fl.className = "flash";
+      fl.addEventListener("animationend", function () { fl.remove(); });
+      document.querySelector(".stage").appendChild(fl);
       toast("📸 " + (i + 1) + " of " + bCount);
       await boothWait(700);
     }
