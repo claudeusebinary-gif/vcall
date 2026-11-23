@@ -394,6 +394,19 @@
   :root[data-theme="cream"] .filters { background: rgba(36,24,16,.9); }
   :root[data-theme="cream"] .filters .chip { background: rgba(243,234,217,.08); }
   :root[data-theme="cream"] .filters .chip.active { background: var(--accent); }
+  .bgroup { margin-bottom: 10px; }
+  .bgroup > span { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .bchips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .bresult { margin-bottom: 10px; text-align: center; }
+  .bresult img { display: block; margin: 0 auto 8px; max-width: 100%; max-height: 38vh; border-radius: 8px; }
+  .bresult .btn { display: inline-flex; align-items: center; text-decoration: none; }
+  .booth .row { justify-content: flex-end; }
+  .booth #bStart { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+  .booth #bStart:disabled { opacity: .6; }
+  .count {
+    position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); z-index: 4; pointer-events: none;
+    font-size: clamp(90px, 22vw, 180px); font-weight: 800; color: #fff; text-shadow: 0 4px 24px rgba(0,0,0,.5);
+  }
   .toast {
     position: absolute; left: 50%; top: 16px; transform: translateX(-50%); z-index: 4;
     padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap;
@@ -450,6 +463,7 @@
         <label class="btn filepick" for="fileIn">Choose video</label>
         <input type="file" id="fileIn" accept="video/*" hidden>
         <span class="fname" id="fileName">Pick the same file as her</span>
+        <button class="btn" id="fileSend" type="button">Send to her</button>
         <button class="btn" id="fileClose" type="button">Close</button>
       </div>
     </div>
@@ -465,6 +479,17 @@
       <div class="ttt" id="ttt"></div>
       <p id="gameMsg"></p>
       <div class="row"><button class="btn" id="gameNew" type="button">New game</button><button class="btn" id="gameClose" type="button">Close</button></div>
+    </div>
+    <div class="count" id="count" hidden></div>
+    <div class="watch booth" id="boothCard" hidden>
+      <div class="bgroup"><span>Photos</span><div class="bchips" id="bCount"></div></div>
+      <div class="bgroup"><span>Sticker</span><div class="bchips" id="bStick"></div></div>
+      <div class="bgroup"><span>Strip colour</span><div class="bchips" id="bColor"></div></div>
+      <div class="bresult" id="bResult" hidden>
+        <img id="bImg" alt="Your photo strip">
+        <a class="btn" id="bSave" download="just-us-strip.png">Save strip</a>
+      </div>
+      <div class="row"><button class="btn" id="bStart" type="button">Start</button><button class="btn" id="bClose" type="button">Close</button></div>
     </div>
     <div class="toast" id="toast" hidden></div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
@@ -931,6 +956,7 @@
   function releaseScreen() {
     if (screenTrack) { try { screenTrack.stop(); } catch (e) {} }
     screenTrack = null; screenStream = null;
+    stopFileSend();
     setShareUI(false);
     $("remoteVideo").classList.remove("contain");
   }
@@ -1133,6 +1159,101 @@
   $("themeLobby").addEventListener("click", cycleTheme);
   applyTheme();
 
+  // ---------- photobooth: 1 to 4 photos of both of you on one strip ----------
+  var B_STICKERS = ["", "🕶️", "😎", "❤️", "⭐", "🎀", "🐱", "🌸", "🔥"];
+  var B_COLORS = [
+    { n: "Cream", bg: "#f3ead9", ink: "#3b2a1e" }, { n: "White", bg: "#ffffff", ink: "#14161a" },
+    { n: "Black", bg: "#111214", ink: "#f4f4f4" }, { n: "Blue", bg: "#5b9cff", ink: "#06101f" }
+  ];
+  var bCount = 3, bSticker = "", bColor = 0, bBusy = false, bFloat = null;
+
+  function bChips(id, items, label, pick, isActive) {
+    var box = $(id);
+    function mark() {
+      Array.prototype.forEach.call(box.children, function (c, j) { c.classList.toggle("active", isActive(items[j], j)); });
+    }
+    items.forEach(function (it, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = label(it);
+      b.addEventListener("click", function () { pick(it, i); mark(); });
+      box.appendChild(b);
+    });
+    mark();
+  }
+  bChips("bCount", [1, 2, 3, 4], function (n) { return n + (n === 1 ? " photo" : " photos"); }, function (n) { bCount = n; }, function (n) { return n === bCount; });
+  bChips("bStick", B_STICKERS, function (s) { return s || "None"; }, function (s) { bSticker = s; }, function (s) { return s === bSticker; });
+  bChips("bColor", B_COLORS, function (c) { return c.n; }, function (c, i) { bColor = i; }, function (c, i) { return i === bColor; });
+
+  // One frame: you on the left, her on the right (or just you if she has no video), plus stickers.
+  function boothFrame() {
+    var c = document.createElement("canvas");
+    c.width = 640; c.height = 300;
+    var x = c.getContext("2d"), rv = $("remoteVideo"), sv = $("selfVideo");
+    x.fillStyle = "#000"; x.fillRect(0, 0, 640, 300);
+    if (rv.videoWidth) { drawCover(x, sv, 0, 0, 320, 300, true); drawCover(x, rv, 320, 0, 320, 300, false); }
+    else drawCover(x, sv, 0, 0, 640, 300, true);
+    if (bSticker) {
+      for (var i = 0; i < 6; i++) {
+        x.save();
+        x.translate(30 + Math.random() * 580, 50 + Math.random() * 230);
+        x.rotate((Math.random() - 0.5) * 0.8);
+        x.font = Math.round(44 + Math.random() * 36) + "px sans-serif";
+        x.textAlign = "center";
+        x.fillText(bSticker, 0, 0);
+        x.restore();
+      }
+    }
+    return c;
+  }
+  function boothStrip(frames) {
+    var col = B_COLORS[bColor], n = frames.length, W = 700, H = 100 + n * 316 + 54;
+    var c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    var x = c.getContext("2d");
+    x.fillStyle = col.bg; x.fillRect(0, 0, W, H);
+    x.fillStyle = col.ink; x.textAlign = "center";
+    x.font = "800 44px Manrope, sans-serif"; x.fillText("Just us", W / 2, 64);
+    frames.forEach(function (f, i) { x.drawImage(f, 30, 90 + i * 316); });
+    x.font = "600 22px Manrope, sans-serif";
+    x.fillText(new Date().toISOString().slice(0, 10), W / 2, H - 20);
+    return c;
+  }
+  function boothWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  async function boothRun() {
+    if (bBusy) return;
+    bBusy = true; $("bStart").disabled = true; $("bResult").hidden = true;
+    var frames = [];
+    for (var i = 0; i < bCount; i++) {
+      for (var s = 3; s > 0; s--) {
+        if ($("boothCard").hidden) { bBusy = false; return; }
+        $("count").textContent = s; $("count").hidden = false;
+        sfx.click();
+        await boothWait(900);
+      }
+      $("count").hidden = true;
+      tone(220, 0, 0.12, 0.1);
+      frames.push(boothFrame());
+      toast("📸 " + (i + 1) + " of " + bCount);
+      await boothWait(700);
+    }
+    var url = boothStrip(frames).toDataURL("image/png");
+    $("bImg").src = url; $("bSave").href = url;
+    $("bResult").hidden = false;
+    bBusy = false; $("bStart").disabled = false;
+  }
+  // The chosen sticker floats up the screen while the booth is open.
+  function boothOpen() {
+    $("boothCard").hidden = false;
+    if (!bFloat) bFloat = setInterval(function () { if (bSticker) floatEmoji(bSticker); }, 700);
+  }
+  function boothClose() {
+    $("boothCard").hidden = true; $("count").hidden = true; $("bResult").hidden = true;
+    clearInterval(bFloat); bFloat = null;
+    bBusy = false; $("bStart").disabled = false;
+  }
+  $("bStart").addEventListener("click", boothRun);
+  $("bClose").addEventListener("click", boothClose);
+
   // ---------- hand signs (the camera picture is analysed on your device and never sent for this) ----------
   var MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
   var GR_MODEL = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
@@ -1227,6 +1348,7 @@
   function sameFile(a, b) { return a && b && a.name === b.name && a.size === b.size; }
 
   function fileClose(notify) {
+    if (fileSendOn) stopScreen();
     fileSuppress();
     fv.pause(); fv.removeAttribute("src"); fv.load();
     if (fileUrl) { URL.revokeObjectURL(fileUrl); fileUrl = ""; }
@@ -1273,6 +1395,56 @@
     if (d.cmd === "play") fv.play().catch(function () {});
     else if (d.cmd === "pause") fv.pause();
   }
+
+  // ---------- send your file to her live (she needs no file) ----------
+  var fileSendOn = false, fileStream = null, mixCtx = null;
+
+  async function startFileSend() {
+    if (fileSendOn) { stopScreen(); return; }
+    var cap = fv.captureStream || fv.mozCaptureStream;
+    if (!fileLive()) { addLine("Choose a video first.", "sys"); return; }
+    if (!cap) { addLine("This browser can’t send a video file. Use Chrome on a computer or Android.", "sys"); return; }
+    if (!mediaCall || !mediaCall.peerConnection) { addLine("Wait until you’re connected.", "sys"); return; }
+    if (screenTrack) stopScreen();
+    fileStream = cap.call(fv);
+    var tries = 0;
+    while (!fileStream.getVideoTracks().length && tries++ < 20) await new Promise(function (r) { setTimeout(r, 150); });
+    var vt = fileStream.getVideoTracks()[0];
+    if (!vt) { addLine("Couldn’t read the video. Press play once, then try again.", "sys"); fileStream = null; return; }
+    screenStream = fileStream; screenTrack = vt;
+    setShareUI(true);
+    fileSendOn = true;
+    $("fileSend").textContent = "Stop sending";
+    try {
+      // Mix your voice with the movie sound so she hears both.
+      mixCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var dest = mixCtx.createMediaStreamDestination();
+      if (localStream.getAudioTracks().length) mixCtx.createMediaStreamSource(new MediaStream(localStream.getAudioTracks())).connect(dest);
+      if (fileStream.getAudioTracks().length) mixCtx.createMediaStreamSource(new MediaStream(fileStream.getAudioTracks())).connect(dest);
+      var mixed = dest.stream.getAudioTracks()[0];
+      mediaCall.peerConnection.getSenders().forEach(function (s) {
+        if (s.track && s.track.kind === "audio") s.replaceTrack(mixed).catch(function () {});
+      });
+    } catch (e) { addLine("Sent the picture, but couldn’t add the movie sound.", "sys"); }
+    sendOnly({ type: "file", cmd: "close" });
+    sendOnly({ type: "screen", on: true });
+    applySendTrack();
+    if (fv.paused) addLine("Press play on the video to start. She sees it live.", "sys");
+  }
+  function stopFileSend() {
+    if (!fileSendOn) return;
+    fileSendOn = false;
+    $("fileSend").textContent = "Send to her";
+    var mic = localStream && localStream.getAudioTracks()[0];
+    if (mediaCall && mediaCall.peerConnection && mic) {
+      mediaCall.peerConnection.getSenders().forEach(function (s) {
+        if (s.track && s.track.kind === "audio") s.replaceTrack(mic).catch(function () {});
+      });
+    }
+    if (mixCtx) { try { mixCtx.close(); } catch (e) {} mixCtx = null; }
+    fileStream = null;
+  }
+  $("fileSend").addEventListener("click", startFileSend);
 
   // ---------- watch together (YouTube) ----------
   var yt = null, ytApi = null, ytQuiet = 0, ytLast = 0, ytLastAt = 0, ytPoll = null;
@@ -1414,6 +1586,7 @@
     watchClose(false);
     fileClose(false);
     gesturesOff();
+    boothClose();
     $("game").hidden = true; ttt.over = true;
     if (rec) rec.stop();
     hist = [];
@@ -1583,6 +1756,7 @@
     $("watch").hidden = false;
     $("ytUrl").focus();
   });
+  addFun("Photobooth", boothOpen);
   addFun("Hand signs: off", async function () {
     var chip = this;
     if (gOn) { gesturesOff(); toast("Hand signs off"); return; }
