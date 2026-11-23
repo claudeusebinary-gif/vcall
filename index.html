@@ -394,6 +394,12 @@
   :root[data-theme="cream"] .filters { background: rgba(36,24,16,.9); }
   :root[data-theme="cream"] .filters .chip { background: rgba(243,234,217,.08); }
   :root[data-theme="cream"] .filters .chip.active { background: var(--accent); }
+  .toast {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%); z-index: 4;
+    padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap;
+    background: rgba(15,16,18,.82); color: #eceef1; border: 1px solid rgba(255,255,255,.12);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
   .filters:not([hidden]), .more:not([hidden]) { animation: pop .15s ease-out; }
   @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .filters, .more { animation: none !important; } }
@@ -460,6 +466,7 @@
       <p id="gameMsg"></p>
       <div class="row"><button class="btn" id="gameNew" type="button">New game</button><button class="btn" id="gameClose" type="button">Close</button></div>
     </div>
+    <div class="toast" id="toast" hidden></div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
     <div class="controls">
       <div class="filters" id="qual" hidden aria-label="Her video quality"></div>
@@ -946,6 +953,7 @@
       $("pip").classList.toggle("back", facing === "environment");
       stopFx();
       if (rawV) rawV.srcObject = new MediaStream([nt]);
+      if (gv) gv.srcObject = new MediaStream([nt]);
       applySendTrack();
     } catch (e) { addLine("Couldn’t switch the camera.", "sys"); }
   }
@@ -1124,6 +1132,93 @@
   $("themeBtn").addEventListener("click", cycleTheme);
   $("themeLobby").addEventListener("click", cycleTheme);
   applyTheme();
+
+  // ---------- hand signs (the camera picture is analysed on your device and never sent for this) ----------
+  var MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+  var GR_MODEL = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
+  var EXTRA_EMOJIS = ["✌️", "👍", "👎", "🤟", "👋"];
+  var gr = null, gv = null, gTimer = null, gName = "", gSince = 0, gCool = 0, gOn = false;
+
+  function toast(t) {
+    var el = $("toast");
+    el.textContent = t; el.hidden = false;
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.hidden = true; }, 1800);
+  }
+  function react(e) { sendOnly({ type: "react", emoji: e }); floatEmoji(e); }
+  function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+  // OK sign: thumb tip touches index tip, the other three fingers stay straight.
+  function isOk(l) {
+    var s = dist(l[0], l[9]) || 1;
+    if (dist(l[4], l[8]) > 0.3 * s) return false;
+    return dist(l[0], l[12]) > dist(l[0], l[10]) && dist(l[0], l[16]) > dist(l[0], l[14]) && dist(l[0], l[20]) > dist(l[0], l[18]);
+  }
+  function chipByText(re) {
+    var cs = $("fun").querySelectorAll(".chip");
+    for (var i = 0; i < cs.length; i++) if (re.test(cs[i].textContent)) return cs[i];
+    return null;
+  }
+  var SIGNS = {
+    Victory: ["✌️ Peace", function () { react("✌️"); }],
+    Thumb_Up: ["👍 Nice", function () { react("👍"); }],
+    Thumb_Down: ["👎", function () { react("👎"); }],
+    ILoveYou: ["🤟 I love you", function () { react("🤟"); }],
+    Open_Palm: ["👋 Hi", function () { react("👋"); }],
+    Closed_Fist: ["📸 Photo", function () { takePhoto(); }],
+    OK: ["👌 Record", function () { var c = chipByText(/^(Record|Stop recording)$/); if (c) toggleRecord(c); }],
+    Pointing_Up: ["☝️ Question", function () {
+      var i = Math.floor(Math.random() * QUESTIONS.length);
+      if (sendData({ type: "ask", i: i })) showAsk(i);
+    }]
+  };
+
+  // A sign must be held for about one second, then waits three seconds before it can fire again.
+  function gestureTick() {
+    if (!gr || !gv || gv.readyState < 2 || document.hidden) return;
+    var res;
+    try { res = gr.recognizeForVideo(gv, performance.now()); } catch (e) { return; }
+    var name = "", lm = res.landmarks && res.landmarks[0];
+    var top = res.gestures && res.gestures[0] && res.gestures[0][0];
+    if (top && top.score > 0.7 && top.categoryName !== "None") name = top.categoryName;
+    if (lm && isOk(lm)) name = "OK";
+    var now = Date.now();
+    if (name !== gName) { gName = name; gSince = now; return; }
+    if (name && SIGNS[name] && now - gSince > 900 && now > gCool) {
+      gCool = now + 3000;
+      toast(SIGNS[name][0]);
+      SIGNS[name][1]();
+    }
+  }
+  async function gesturesOn() {
+    if (!localStream) return false;
+    toast("Loading hand signs…");
+    try {
+      if (!gr) {
+        var mp = await import(MP_BASE + "/vision_bundle.mjs");
+        var fs = await mp.FilesetResolver.forVisionTasks(MP_BASE + "/wasm");
+        var mk = function (delegate) {
+          return mp.GestureRecognizer.createFromOptions(fs, {
+            baseOptions: { modelAssetPath: GR_MODEL, delegate: delegate }, runningMode: "VIDEO", numHands: 1
+          });
+        };
+        try { gr = await mk("GPU"); } catch (e) { gr = await mk("CPU"); }
+      }
+    } catch (e) { toast("Couldn’t load hand signs"); return false; }
+    gv = document.createElement("video");
+    gv.muted = true; gv.playsInline = true;
+    gv.srcObject = new MediaStream(localStream.getVideoTracks());
+    gv.play().catch(function () {});
+    gTimer = setInterval(gestureTick, 150);
+    gOn = true;
+    return true;
+  }
+  function gesturesOff() {
+    clearInterval(gTimer); gTimer = null;
+    if (gv) { gv.srcObject = null; gv = null; }
+    gOn = false; gName = "";
+    var c = chipByText(/^Hand signs/);
+    if (c) { c.textContent = "Hand signs: off"; c.classList.remove("active"); }
+  }
 
   // ---------- watch a file together (each of you picks the same file; nothing is uploaded) ----------
   var fv = $("fileVideo"), fileUrl = "", fileQuiet = 0, fileInfo = null, myFile = null;
@@ -1318,6 +1413,7 @@
     facing = "user"; $("pip").classList.remove("back");
     watchClose(false);
     fileClose(false);
+    gesturesOff();
     $("game").hidden = true; ttt.over = true;
     if (rec) rec.stop();
     hist = [];
@@ -1401,7 +1497,7 @@
   function onData(d) {
     if (!d) return;
     if (d.type === "chat" && typeof d.text === "string") addMsg(d.text.slice(0, 2000), false);
-    else if (d.type === "react" && EMOJIS.indexOf(d.emoji) > -1) floatEmoji(d.emoji);
+    else if (d.type === "react" && (EMOJIS.indexOf(d.emoji) > -1 || EXTRA_EMOJIS.indexOf(d.emoji) > -1)) floatEmoji(d.emoji);
     else if (d.type === "buzz" && Date.now() - lastBuzz > 3000) { lastBuzz = Date.now(); buzz(false); }
     else if (d.type === "ask" && typeof d.i === "number") showAsk(d.i | 0);
     else if (d.type === "quality" && Object.prototype.hasOwnProperty.call(QUALITY, d.q)) { outQuality = d.q; applyQuality(d.q); }
@@ -1486,6 +1582,16 @@
   addFun("Watch together", function () {
     $("watch").hidden = false;
     $("ytUrl").focus();
+  });
+  addFun("Hand signs: off", async function () {
+    var chip = this;
+    if (gOn) { gesturesOff(); toast("Hand signs off"); return; }
+    if (await gesturesOn()) {
+      chip.textContent = "Hand signs: on";
+      chip.classList.add("active");
+      toast("Hand signs on");
+      addLine("Hold a sign for one second: ✌️ peace, 👍, 👎, 🤟 I love you, 👋 open palm, ✊ fist takes a photo, 👌 OK starts or stops recording, ☝️ asks a question.", "sys");
+    }
   });
   addFun("Watch a file", function () { $("fileCard").hidden = false; });
   addFun("Tic-tac-toe", newGame);
