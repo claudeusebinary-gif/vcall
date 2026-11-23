@@ -6,7 +6,7 @@
 <title>Just us</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#0f1012">
-<script>try{var t=localStorage.getItem("justus-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<script>try{var t=localStorage.getItem("justus-theme");if(t==="light"||t==="dark"||t==="cream")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -346,7 +346,7 @@
     }
   }
   /* The video area stays dark in both themes, like most call apps. */
-  .stage { --panel: #17181b; --line: #2a2d33; --text: #eceef1; --muted: #8a8f98; --ok: #5fd3a5; color: var(--text); }
+  .stage { --night: #0f1012; --panel: #17181b; --line: #2a2d33; --text: #eceef1; --muted: #8a8f98; --ok: #5fd3a5; color: var(--text); }
   input::placeholder { color: var(--muted); opacity: .7; }
   .theme-corner { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 1; padding: 7px 12px; font-size: 13px; }
 
@@ -370,6 +370,30 @@
   }
   .btn { background: var(--btn, var(--panel)); border-color: var(--btn-line, var(--line)); }
   .stage { --btn: #1f2126; --btn-line: #2a2d33; }
+  .ytbox video { display: block; width: 100%; height: 100%; background: #000; }
+  .filepick { display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap; }
+  .fname { flex: 1; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+
+  /* ---------- brown and cream theme ---------- */
+  :root[data-theme="cream"] {
+    color-scheme: light;
+    --night: #f3ead9; --panel: #fbf6ea; --line: #dccfb6;
+    --text: #3b2a1e; --muted: #7a6753;
+    --accent: #8b5a3c; --accent-ink: #fff8ec; --ok: #5c7a4a;
+    --bubble: #eadfc8; --btn: #ede2cc; --btn-line: #d3c4a6;
+  }
+  /* The video area turns a warm dark brown with a caramel accent. */
+  :root[data-theme="cream"] .stage {
+    --night: #241812; --panel: #33241a; --line: #54402f; --text: #f3ead9; --muted: #b8a68f;
+    --accent: #c98f5b; --accent-ink: #2a1d14; --ok: #9bc37e; --btn: #3d2c20; --btn-line: #54402f;
+  }
+  :root[data-theme="cream"] .bar,
+  :root[data-theme="cream"] .more,
+  :root[data-theme="cream"] .status,
+  :root[data-theme="cream"] .chip { background: rgba(36,24,16,.8); }
+  :root[data-theme="cream"] .filters { background: rgba(36,24,16,.9); }
+  :root[data-theme="cream"] .filters .chip { background: rgba(243,234,217,.08); }
+  :root[data-theme="cream"] .filters .chip.active { background: var(--accent); }
   .filters:not([hidden]), .more:not([hidden]) { animation: pop .15s ease-out; }
   @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .filters, .more { animation: none !important; } }
@@ -414,6 +438,15 @@
     <canvas class="draw" id="draw"></canvas>
     <div class="pip" id="pip"><video id="selfVideo" autoplay playsinline muted></video></div>
     <div class="ask" id="ask" hidden><p id="askText"></p><button class="btn" id="askClose" type="button">Close</button></div>
+    <div class="watch" id="fileCard" hidden>
+      <div class="ytbox"><video id="fileVideo" controls playsinline></video></div>
+      <div class="row">
+        <label class="btn filepick" for="fileIn">Choose video</label>
+        <input type="file" id="fileIn" accept="video/*" hidden>
+        <span class="fname" id="fileName">Pick the same file as her</span>
+        <button class="btn" id="fileClose" type="button">Close</button>
+      </div>
+    </div>
     <div class="watch" id="watch" hidden>
       <div class="ytbox" id="ytBox"></div>
       <div class="row">
@@ -1069,21 +1102,22 @@
   });
 
   // ---------- theme: Auto follows the phone, or force Light or Dark ----------
-  var themeMode = "auto";
+  var themeMode = "auto", drawMine = "#5b9cff";
   try { themeMode = localStorage.getItem("justus-theme") || "auto"; } catch (e) {}
   function applyTheme() {
     var root = document.documentElement;
-    if (themeMode === "light" || themeMode === "dark") root.setAttribute("data-theme", themeMode);
+    if (themeMode === "light" || themeMode === "dark" || themeMode === "cream") root.setAttribute("data-theme", themeMode);
     else root.removeAttribute("data-theme");
     var label = "Theme: " + themeMode.charAt(0).toUpperCase() + themeMode.slice(1);
     $("themeBtn").textContent = label;
     $("themeLobby").textContent = label;
     var light = themeMode === "light" || (themeMode === "auto" && window.matchMedia("(prefers-color-scheme: light)").matches);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", light ? "#f6f7f9" : "#0f1012");
+    if (meta) meta.setAttribute("content", themeMode === "cream" ? "#f3ead9" : light ? "#f6f7f9" : "#0f1012");
+    drawMine = getComputedStyle(document.querySelector(".stage")).getPropertyValue("--accent").trim() || "#5b9cff";
   }
   function cycleTheme() {
-    themeMode = themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : "auto";
+    themeMode = themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : themeMode === "dark" ? "cream" : "auto";
     try { localStorage.setItem("justus-theme", themeMode); } catch (e) {}
     applyTheme();
   }
@@ -1091,8 +1125,62 @@
   $("themeLobby").addEventListener("click", cycleTheme);
   applyTheme();
 
+  // ---------- watch a file together (each of you picks the same file; nothing is uploaded) ----------
+  var fv = $("fileVideo"), fileUrl = "", fileQuiet = 0, fileInfo = null, myFile = null;
+  function fileLive() { return !!fv.getAttribute("src"); }
+  function fileSuppress() { fileQuiet = Date.now() + 800; }
+  function sameFile(a, b) { return a && b && a.name === b.name && a.size === b.size; }
+
+  function fileClose(notify) {
+    fileSuppress();
+    fv.pause(); fv.removeAttribute("src"); fv.load();
+    if (fileUrl) { URL.revokeObjectURL(fileUrl); fileUrl = ""; }
+    $("fileName").textContent = "Pick the same file as her";
+    $("fileCard").hidden = true;
+    fileInfo = null; myFile = null;
+    if (notify) sendOnly({ type: "file", cmd: "close" });
+  }
+
+  $("fileIn").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    if (fileUrl) URL.revokeObjectURL(fileUrl);
+    fileUrl = URL.createObjectURL(f);
+    fv.src = fileUrl;
+    myFile = { name: f.name, size: f.size };
+    $("fileName").textContent = f.name;
+    if (fileInfo && !sameFile(fileInfo, myFile)) addLine("This file looks different from hers, so the timing may not match.", "sys");
+    sendOnly({ type: "file", cmd: "open", name: f.name, size: f.size });
+    this.value = "";
+  });
+  $("fileClose").addEventListener("click", function () { fileClose(true); });
+
+  ["play", "pause", "seeked"].forEach(function (ev) {
+    fv.addEventListener(ev, function () {
+      if (!fileLive() || Date.now() < fileQuiet) return;
+      sendOnly({ type: "file", cmd: ev === "seeked" ? "seek" : ev, t: fv.currentTime });
+    });
+  });
+
+  function fileRemote(d) {
+    if (d.cmd === "open") {
+      fileInfo = { name: String(d.name || "").slice(0, 200), size: Number(d.size) || 0 };
+      $("fileCard").hidden = false;
+      addLine("She opened “" + fileInfo.name + "”. Choose the same file on your side.", "sys");
+      if (myFile && !sameFile(fileInfo, myFile)) addLine("Your file looks different from hers, so the timing may not match.", "sys");
+      return;
+    }
+    if (d.cmd === "close") { fileClose(false); return; }
+    if (!fileLive()) return;
+    var t = Number(d.t) || 0;
+    fileSuppress();
+    if (Math.abs(fv.currentTime - t) > 0.5) fv.currentTime = t;
+    if (d.cmd === "play") fv.play().catch(function () {});
+    else if (d.cmd === "pause") fv.pause();
+  }
+
   // ---------- watch together (YouTube) ----------
-  var yt = null, ytApi = null, ytQuiet = 0;
+  var yt = null, ytApi = null, ytQuiet = 0, ytLast = 0, ytLastAt = 0, ytPoll = null;
 
   function sendOnly(o) { if (dataConn && dataConn.open) dataConn.send(o); }
   function ytId(s) {
@@ -1113,6 +1201,19 @@
   }
   // Ignore the echo of changes we just applied from her side.
   function ytSuppress() { ytQuiet = Date.now() + 1200; }
+  // Twice a second: if the time jumped more than normal playback explains, you scrubbed, so tell her.
+  function startYtPoll() {
+    if (ytPoll) return;
+    ytLast = 0; ytLastAt = Date.now();
+    ytPoll = setInterval(function () {
+      if (!yt || !yt.getCurrentTime || !yt.getPlayerState) return;
+      var now = Date.now(), t = yt.getCurrentTime(), st = yt.getPlayerState();
+      var rate = yt.getPlaybackRate ? yt.getPlaybackRate() : 1;
+      var expected = ytLast + (st === 1 ? ((now - ytLastAt) / 1000) * rate : 0);
+      if (now > ytQuiet && Math.abs(t - expected) > 1.5) sendOnly({ type: "watch", cmd: "seek", t: t });
+      ytLast = t; ytLastAt = now;
+    }, 500);
+  }
   function onYtState(e) {
     if (Date.now() < ytQuiet || !yt) return;
     if (e.data === 1) sendOnly({ type: "watch", cmd: "play", t: yt.getCurrentTime() });
@@ -1130,10 +1231,13 @@
         playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
         events: { onStateChange: onYtState }
       });
+      ytSuppress();
+      startYtPoll();
     }).catch(function () { addLine("Couldn’t load YouTube.", "sys"); });
   }
   function watchClose(notify) {
     if (yt) { try { yt.destroy(); } catch (e) {} yt = null; }
+    clearInterval(ytPoll); ytPoll = null;
     $("ytBox").textContent = "";
     $("watch").hidden = true;
     if (notify) sendOnly({ type: "watch", cmd: "close" });
@@ -1177,7 +1281,7 @@
   // Your lines are pink, hers are green. Everything fades after 12 quiet seconds.
   function drawSeg(s, mine) {
     sizeDraw();
-    dctx.strokeStyle = mine ? "#6aa7ff" : "#6ee7b7";
+    dctx.strokeStyle = mine ? drawMine : "#6ee7b7";
     dctx.lineWidth = 5; dctx.lineCap = "round";
     dctx.beginPath();
     dctx.moveTo(s.x0 * dcv.width, s.y0 * dcv.height);
@@ -1213,6 +1317,7 @@
     stage.classList.remove("swap");
     facing = "user"; $("pip").classList.remove("back");
     watchClose(false);
+    fileClose(false);
     $("game").hidden = true; ttt.over = true;
     if (rec) rec.stop();
     hist = [];
@@ -1312,6 +1417,7 @@
       else if (d.cmd === "move" && (d.i | 0) >= 0 && (d.i | 0) < 9) tttPlay(d.i | 0, ttt.me === "X" ? "O" : "X");
     }
     else if (d.type === "watch") watchRemote(d);
+    else if (d.type === "file") fileRemote(d);
     else if (d.type === "rec") addLine(d.on ? "She started recording the call." : "She stopped recording.", "sys");
   }
 
@@ -1381,6 +1487,7 @@
     $("watch").hidden = false;
     $("ytUrl").focus();
   });
+  addFun("Watch a file", function () { $("fileCard").hidden = false; });
   addFun("Tic-tac-toe", newGame);
   addFun("Record", function () { toggleRecord(this); });
 
