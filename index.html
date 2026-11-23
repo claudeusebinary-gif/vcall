@@ -1093,7 +1093,7 @@
   }
 
   function markChips() {
-    var chips = $("filters").querySelectorAll(".chip");
+    var chips = $("filters").querySelectorAll(".tile");
     for (var i = 0; i < chips.length; i++) {
       chips[i].classList.toggle("active", FILTERS[i] === currentFilter);
     }
@@ -1115,15 +1115,42 @@
   });
   markChips();
 
+  // One still frame from your camera, shown with each filter applied.
+  var rawV = null;
+  function drawPreviews() {
+    if (!localStream || $("filters").hidden) return;
+    if (!rawV) {
+      rawV = document.createElement("video");
+      rawV.muted = true; rawV.playsInline = true;
+      rawV.srcObject = new MediaStream(localStream.getVideoTracks());
+      rawV.play().catch(function () {});
+    }
+    if (rawV.readyState < 2 || !rawV.videoWidth) { setTimeout(drawPreviews, 300); return; }
+    FILTERS.forEach(function (f) {
+      var c = f.canvas, x = c.getContext("2d", { willReadFrequently: true });
+      var w = c.width, h = c.height;
+      x.filter = f.blur || "none";
+      drawCover(x, rawV, 0, 0, w, h, true);
+      x.filter = "none";
+      if (f.px) {
+        var img = x.getImageData(0, 0, w, h), d = img.data;
+        for (var i = 0; i < d.length; i += 4) f.px(d, i);
+        x.putImageData(img, 0, 0);
+      }
+    });
+  }
+
   $("filterBtn").addEventListener("click", function () {
     var box = $("filters");
     box.hidden = !box.hidden;
+    if (!box.hidden) drawPreviews();
     this.classList.toggle("active", !box.hidden);
   });
 
   function resetFilters() {
     currentFilter = FILTERS[0];
     stopFx();
+    if (rawV) { rawV.srcObject = null; rawV = null; }
     markChips();
     $("filters").hidden = true;
     $("fun").hidden = true;
