@@ -316,6 +316,19 @@
   .ttt button { height: 72px; font-size: 32px; font-weight: 800; border-radius: 12px; border: 0; background: rgba(255,255,255,.06); color: var(--text); cursor: pointer; }
   .ttt .X { color: var(--accent); }
   .ttt .O { color: var(--ok); }
+  .emojis, .log { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+  .emojis::-webkit-scrollbar { height: 4px; }
+  .log::-webkit-scrollbar { width: 4px; }
+  .emojis::-webkit-scrollbar-track, .log::-webkit-scrollbar-track { background: transparent; }
+  .emojis::-webkit-scrollbar-thumb, .log::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 4px; }
+  .emojis::-webkit-scrollbar-thumb:hover, .log::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.32); }
+  .watch {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(94%, 640px); z-index: 3; padding: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  }
+  .ytbox { aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+  .ytbox iframe { display: block; width: 100%; height: 100%; border: 0; }
   .filters:not([hidden]), .more:not([hidden]) { animation: pop .15s ease-out; }
   @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .filters, .more { animation: none !important; } }
@@ -359,6 +372,14 @@
     <canvas class="draw" id="draw"></canvas>
     <div class="pip" id="pip"><video id="selfVideo" autoplay playsinline muted></video></div>
     <div class="ask" id="ask" hidden><p id="askText"></p><button class="btn" id="askClose" type="button">Close</button></div>
+    <div class="watch" id="watch" hidden>
+      <div class="ytbox" id="ytBox"></div>
+      <div class="row">
+        <input type="text" id="ytUrl" placeholder="Paste a YouTube link" aria-label="YouTube link" autocomplete="off">
+        <button class="btn" id="ytGo" type="button">Play</button>
+        <button class="btn" id="ytClose" type="button">Close</button>
+      </div>
+    </div>
     <div class="ask game" id="game" hidden>
       <div class="ttt" id="ttt"></div>
       <p id="gameMsg"></p>
@@ -375,6 +396,7 @@
         <button class="btn" id="filterBtn" type="button">Filters</button>
         <button class="btn" id="shareBtn" type="button">Share screen</button>
         <button class="btn" id="flipBtn" type="button">Flip camera</button>
+        <button class="btn" id="soundBtn" type="button">Sounds: on</button>
       </div>
       <div class="bar">
         <button class="btn icon" id="micBtn" type="button" aria-label="Mute microphone" title="Microphone">
@@ -523,6 +545,7 @@
     peer.on("open", function () {
       setStatus("Waiting", false);
       showWaiting("Waiting for her…", "Send her your code, or copy the invite link. The call starts as soon as she enters.", true);
+      startRing();
     });
     peer.on("connection", function (c) {
       if (dataConn && dataConn.open) { c.on("open", function () { c.close(); }); return; }
@@ -577,6 +600,8 @@
           $("waiting").hidden = true;
           playRemote();
           applySendTrack();
+          stopRing();
+          if (!tick) sfx.join();
           startTimer();
         } else if (s === "failed") {
           blocked();
@@ -635,6 +660,8 @@
   function partnerLeft() {
     if (!peer) return;
     stopTimer();
+    sfx.end();
+    if (peer.id === roomId(roomCode)) startRing();
     releaseScreen();
     dataConn = null; mediaCall = null;
     $("remoteVideo").srcObject = null;
@@ -649,6 +676,7 @@
     if (t === "peer-unavailable") text = "Nobody is in this room yet. Press Leave and enter again.";
     else if (t === "network" || t === "server-error" || t === "socket-error" || t === "socket-closed")
       text = "Can’t reach the connection server. Check your internet and try again.";
+    stopRing();
     setStatus("Problem", false);
     showWaiting("Couldn’t connect", text, false);
   }
@@ -956,6 +984,119 @@
     addLine("Recording started. She has been told.", "sys");
   }
 
+  // ---------- sounds (made with the browser's audio, no files) ----------
+  var soundsOn = true;
+  try { soundsOn = localStorage.getItem("justus-sounds") !== "off"; } catch (e) {}
+  function audioCtx() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (actx && actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  function tone(freq, at, dur, vol) {
+    var c = soundsOn && audioCtx();
+    if (!c) return;
+    var o = c.createOscillator(), g = c.createGain(), t = c.currentTime + at;
+    o.type = "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  var sfx = {
+    click: function () { tone(700, 0, 0.05, 0.04); },
+    ring: function () { tone(440, 0, 0.4, 0.05); tone(480, 0, 0.4, 0.05); },
+    join: function () { tone(523, 0, 0.14, 0.09); tone(784, 0.12, 0.24, 0.09); },
+    end: function () { tone(494, 0, 0.16, 0.09); tone(370, 0.15, 0.16, 0.09); tone(277, 0.3, 0.32, 0.09); }
+  };
+  var ringTimer = null;
+  function startRing() { if (ringTimer) return; sfx.ring(); ringTimer = setInterval(sfx.ring, 3000); }
+  function stopRing() { clearInterval(ringTimer); ringTimer = null; }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("button");
+    if (b && b.id !== "leaveBtn") sfx.click();
+  });
+  function paintSoundBtn() { $("soundBtn").textContent = soundsOn ? "Sounds: on" : "Sounds: off"; }
+  paintSoundBtn();
+  $("soundBtn").addEventListener("click", function () {
+    soundsOn = !soundsOn;
+    try { localStorage.setItem("justus-sounds", soundsOn ? "on" : "off"); } catch (e) {}
+    paintSoundBtn();
+  });
+
+  // ---------- watch together (YouTube) ----------
+  var yt = null, ytApi = null, ytQuiet = 0;
+
+  function sendOnly(o) { if (dataConn && dataConn.open) dataConn.send(o); }
+  function ytId(s) {
+    var m = s.match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/) || s.match(/^([A-Za-z0-9_-]{11})$/);
+    return m ? m[1] : "";
+  }
+  function loadYT() {
+    if (ytApi) return ytApi;
+    ytApi = new Promise(function (resolve, reject) {
+      if (window.YT && window.YT.Player) return resolve();
+      window.onYouTubeIframeAPIReady = resolve;
+      var s = document.createElement("script");
+      s.src = "https://www.youtube.com/iframe_api";
+      s.onerror = function () { ytApi = null; reject(); };
+      document.head.appendChild(s);
+    });
+    return ytApi;
+  }
+  // Ignore the echo of changes we just applied from her side.
+  function ytSuppress() { ytQuiet = Date.now() + 1200; }
+  function onYtState(e) {
+    if (Date.now() < ytQuiet || !yt) return;
+    if (e.data === 1) sendOnly({ type: "watch", cmd: "play", t: yt.getCurrentTime() });
+    else if (e.data === 2) sendOnly({ type: "watch", cmd: "pause", t: yt.getCurrentTime() });
+  }
+  function watchLoad(id) {
+    $("watch").hidden = false;
+    loadYT().then(function () {
+      if (yt) { ytSuppress(); yt.loadVideoById(id); return; }
+      var d = document.createElement("div");
+      d.id = "ytPlayer";
+      $("ytBox").appendChild(d);
+      yt = new YT.Player("ytPlayer", {
+        videoId: id,
+        playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+        events: { onStateChange: onYtState }
+      });
+    }).catch(function () { addLine("Couldn’t load YouTube.", "sys"); });
+  }
+  function watchClose(notify) {
+    if (yt) { try { yt.destroy(); } catch (e) {} yt = null; }
+    $("ytBox").textContent = "";
+    $("watch").hidden = true;
+    if (notify) sendOnly({ type: "watch", cmd: "close" });
+  }
+  function watchRemote(d) {
+    if (d.cmd === "load" && typeof d.id === "string" && /^[A-Za-z0-9_-]{11}$/.test(d.id)) {
+      addLine("She started a video for you both.", "sys");
+      watchLoad(d.id);
+      return;
+    }
+    if (d.cmd === "close") { watchClose(false); return; }
+    if (!yt || !yt.getCurrentTime) return;
+    var t = Number(d.t) || 0;
+    ytSuppress();
+    if (Math.abs(yt.getCurrentTime() - t) > 1.5) yt.seekTo(t, true);
+    if (d.cmd === "play") yt.playVideo(); else if (d.cmd === "pause") yt.pauseVideo();
+  }
+  function watchGo() {
+    var id = ytId($("ytUrl").value.trim());
+    if (!id) { addLine("That doesn’t look like a YouTube link.", "sys"); return; }
+    if (!dataConn || !dataConn.open) { addLine("Not connected yet.", "sys"); return; }
+    watchLoad(id);
+    sendOnly({ type: "watch", cmd: "load", id: id });
+    $("ytUrl").value = "";
+  }
+  $("ytGo").addEventListener("click", watchGo);
+  $("ytUrl").addEventListener("keydown", function (e) { if (e.key === "Enter") watchGo(); });
+  $("ytClose").addEventListener("click", function () { watchClose(true); });
+
   // ---------- draw together, swap view, typing ----------
   var stage = document.querySelector(".stage");
   var dcv = $("draw"), dctx = dcv.getContext("2d");
@@ -1005,6 +1146,7 @@
     clearTimeout(drawFade); clearDraw();
     stage.classList.remove("swap");
     facing = "user"; $("pip").classList.remove("back");
+    watchClose(false);
     $("game").hidden = true; ttt.over = true;
     if (rec) rec.stop();
     hist = [];
@@ -1103,6 +1245,7 @@
       if (d.cmd === "start") tttStart("O");
       else if (d.cmd === "move" && (d.i | 0) >= 0 && (d.i | 0) < 9) tttPlay(d.i | 0, ttt.me === "X" ? "O" : "X");
     }
+    else if (d.type === "watch") watchRemote(d);
     else if (d.type === "rec") addLine(d.on ? "She started recording the call." : "She stopped recording.", "sys");
   }
 
@@ -1168,6 +1311,10 @@
     if (dataConn && dataConn.open) dataConn.send({ type: "clear" });
   });
 
+  addFun("Watch together", function () {
+    $("watch").hidden = false;
+    $("ytUrl").focus();
+  });
   addFun("Tic-tac-toe", newGame);
   addFun("Record", function () { toggleRecord(this); });
 
@@ -1343,6 +1490,8 @@
     if (localStream) localStream.getTracks().forEach(function (t) { t.stop(); });
     resetFilters();
     stopTimer();
+    stopRing();
+    sfx.end();
     resetDraw();
     releaseScreen();
     viewQuality = "auto"; outQuality = "auto";
